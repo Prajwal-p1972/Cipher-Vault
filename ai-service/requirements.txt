@@ -1,0 +1,18 @@
+# Cipher Vault - Offline AI Microservice Requirements
+# Pinned verified versions for Windows CPU execution
+torch==2.14.1+cpu; sys_platform == 'win32'
+torch>=2.2.0; sys_platform != 'win32'
+fastapi==0.142.2
+uvicorn[standard]==0.54.0
+pydantic==2.13.5
+pydantic-settings==2.15.0
+pymupdf==1.28.2
+easyocr==1.7.2
+pillow==12.3.0
+numpy>=2.0.0
+sentence-transformers==6.1.0
+chromadb==1.5.9
+pytest==9.1.1
+pytest-asyncio==1.4.0
+httpx==0.28.1
+psutil==7.2.2

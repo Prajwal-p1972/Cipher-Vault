@@ -1,0 +1,416 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { parsePayload } from '../utils/qrPayload.js';
+import { getCurrentLocation } from '../utils/geolocation.js';
+import { requestBlob, ApiError } from '../api/http.js';
+import { QrScanner } from './QrScanner.jsx';
+
+/**
+ * UnlockModal guides the receiver through context-gated document opening:
+ * Step 1: Scan & strictly validate QR payload.
+ * Step 2: Step-up MFA verification + on-submit high-accuracy geolocation (if geofenced).
+ *
+ * Security requirements:
+ * - documentKey lives EXCLUSIVELY in a useRef and is scrubbed immediately after request submission and on unmount.
+ * - Never log or render documentKey, TOTP code, or coordinates.
+ *
+ * @param {{
+ *   document: {
+ *     id?: string,
+ *     _id?: string,
+ *     originalName?: string,
+ *     hasGeofence?: boolean,
+ *     policy?: { hasGeofence?: boolean, oneTimeUse?: boolean, expiresAt?: string },
+ *     oneTimeUse?: boolean
+ *   },
+ *   onSuccess: (data: { blob: Blob, contentType: string, originalName: string, status: number }) => void,
+ *   onClose: () => void
+ * }} props
+ */
+export function UnlockModal({ document: doc, onSuccess, onClose }) {
+  const [step, setStep] = useState('scan'); // 'scan' | 'verify'
+  const [scanError, setScanError] = useState(null);
+  const [code, setCode] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
+
+  // Key is kept ONLY in a ref and never put in state, storage, or DOM
+  const documentKeyRef = useRef(null);
+
+  const targetDocId = doc?.id || doc?._id;
+  const isGeofenced = Boolean(doc?.hasGeofence || doc?.policy?.hasGeofence);
+
+  useEffect(() => {
+    return () => {
+      // Memory scrub on unmount
+      documentKeyRef.current = null;
+    };
+  }, []);
+
+  const handleScanResult = (scannedText) => {
+    setScanError(null);
+
+    try {
+      const payload = parsePayload(scannedText);
+
+      if (payload.documentId !== targetDocId) {
+        // MUST DISCARD the key immediately if document ID doesn't match
+        documentKeyRef.current = null;
+        setScanError('This QR belongs to a different document');
+        return;
+      }
+
+      // Valid QR code for this document
+      documentKeyRef.current = payload.documentKey;
+      setStep('verify');
+    } catch (_) {
+      documentKeyRef.current = null;
+      setScanError('Invalid QR code');
+    }
+  };
+
+  const handleBackToScan = () => {
+    documentKeyRef.current = null;
+    setCode('');
+    setSubmitError(null);
+    setScanError(null);
+    setStep('scan');
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (submitting) return;
+
+    setSubmitError(null);
+
+    const trimmedCode = code.trim();
+    if (!/^\d{6}$/.test(trimmedCode)) {
+      setSubmitError('Please enter a valid 6-digit authenticator code.');
+      return;
+    }
+
+    if (!documentKeyRef.current) {
+      setSubmitError('Decryption key is missing. Please scan the QR code again.');
+      setStep('scan');
+      return;
+    }
+
+    setSubmitting(true);
+
+    let locationData = null;
+    if (isGeofenced) {
+      try {
+        locationData = await getCurrentLocation();
+      } catch (geoErr) {
+        setSubmitting(false);
+        const geoCode = geoErr?.code;
+        if (geoCode === 'denied') {
+          setSubmitError('Location access was denied. Please allow location access to unlock this document.');
+        } else if (geoCode === 'timeout') {
+          setSubmitError('Location request timed out. Please try again.');
+        } else if (geoCode === 'unsupported') {
+          setSubmitError('Geolocation is not supported by your browser.');
+        } else {
+          setSubmitError('Unable to determine location. Please ensure location services are enabled.');
+        }
+        return;
+      }
+    }
+
+    // Build payload with only expected fields
+    const requestPayload = {
+      documentKey: documentKeyRef.current,
+      code: trimmedCode
+    };
+
+    if (isGeofenced && locationData) {
+      requestPayload.lat = locationData.lat;
+      requestPayload.lng = locationData.lng;
+      requestPayload.accuracyMeters = locationData.accuracyMeters;
+    }
+
+    // Scrub key immediately after copying into requestPayload
+    documentKeyRef.current = null;
+
+    try {
+      const response = await requestBlob(`/api/documents/${targetDocId}/open`, {
+        method: 'POST',
+        body: requestPayload
+      });
+
+      // Extract Content-Type and Document Name
+      const contentType = response.headers?.get?.('content-type') || response.blob?.type || 'application/octet-stream';
+      let originalName = doc?.originalName || 'document';
+      const rawDocNameHeader = response.headers?.get?.('x-document-name');
+      if (rawDocNameHeader) {
+        try {
+          originalName = decodeURIComponent(rawDocNameHeader);
+        } catch (_) {
+          originalName = rawDocNameHeader;
+        }
+      }
+
+      setSubmitting(false);
+
+      if (typeof onSuccess === 'function') {
+        onSuccess({
+          blob: response.blob,
+          contentType,
+          originalName,
+          status: response.status
+        });
+      }
+    } catch (err) {
+      setSubmitting(false);
+
+      if (err instanceof ApiError) {
+        const { status, code: errorCode } = err;
+
+        if (status === 401) {
+          setSubmitError('Invalid or expired MFA code. Please enter a fresh 6-digit code.');
+        } else if (status === 423) {
+          setSubmitError('Account is temporarily locked due to too many failed unlock attempts. Please try again later.');
+        } else if (status === 429) {
+          setSubmitError('Too many requests. Please slow down and wait a moment before trying again.');
+        } else if (status === 410) {
+          if (errorCode === 'consumed') {
+            setSubmitError('This one-time document has already been opened and destroyed.');
+          } else {
+            setSubmitError('This document has expired and can no longer be accessed.');
+          }
+        } else if (status === 403) {
+          if (errorCode === 'integrity') {
+            setSubmitError('Unable to open this document with this QR.');
+          } else if (errorCode === 'outside_area') {
+            setSubmitError('Access denied: You are outside the authorized geographic area for this document.');
+          } else if (errorCode === 'location_required') {
+            setSubmitError('Location verification is required to open this document.');
+          } else if (errorCode === 'location_imprecise') {
+            setSubmitError('Location accuracy is too low. Please move to an open area with better GPS reception.');
+          } else {
+            setSubmitError('Access denied: Security verification policy failed.');
+          }
+        } else if (status === 404) {
+          setSubmitError('Document not found or you are not authorized to view it.');
+        } else {
+          setSubmitError(err.message || 'Failed to open document.');
+        }
+      } else {
+        setSubmitError(err.message || 'An unexpected network error occurred.');
+      }
+    }
+  };
+
+  const handleModalClose = () => {
+    documentKeyRef.current = null;
+    if (typeof onClose === 'function') {
+      onClose();
+    }
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="unlock-modal-title"
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(15, 23, 42, 0.75)',
+        backdropFilter: 'blur(4px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9999,
+        padding: '1.5rem'
+      }}
+    >
+      <div
+        style={{
+          backgroundColor: '#ffffff',
+          borderRadius: '12px',
+          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1)',
+          maxWidth: '520px',
+          maxHeight: '90vh',
+          overflowY: 'auto',
+          width: '100%',
+          padding: '2rem',
+          boxSizing: 'border-box'
+        }}
+      >
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+          <span style={{ fontSize: '1.75rem', lineHeight: 1 }}>&#128275;</span>
+          <h2
+            id="unlock-modal-title"
+            style={{
+              fontSize: '1.35rem',
+              fontWeight: 700,
+              color: '#0f172a',
+              margin: 0
+            }}
+          >
+            {step === 'scan' ? 'Scan Document QR' : 'Security Verification'}
+          </h2>
+        </div>
+
+        <p style={{ fontSize: '0.875rem', color: '#475569', margin: '0 0 1.25rem 0' }}>
+          Document: <strong>{doc?.originalName || 'Confidential Document'}</strong>
+        </p>
+
+        {/* STEP 1: SCAN */}
+        {step === 'scan' && (
+          <div>
+            {scanError && (
+              <div
+                className="alert alert-error"
+                role="alert"
+                style={{
+                  padding: '0.75rem 1rem',
+                  backgroundColor: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: '6px',
+                  color: '#991b1b',
+                  fontSize: '0.85rem',
+                  marginBottom: '1rem'
+                }}
+              >
+                {scanError}
+              </div>
+            )}
+
+            <QrScanner onResult={handleScanResult} onCancel={handleModalClose} />
+          </div>
+        )}
+
+        {/* STEP 2: VERIFY */}
+        {step === 'verify' && (
+          <form onSubmit={handleSubmit}>
+            {submitError && (
+              <div
+                className="alert alert-error"
+                role="alert"
+                style={{
+                  padding: '0.75rem 1rem',
+                  backgroundColor: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: '6px',
+                  color: '#991b1b',
+                  fontSize: '0.85rem',
+                  marginBottom: '1.25rem',
+                  lineHeight: 1.45
+                }}
+              >
+                {submitError}
+              </div>
+            )}
+
+            {isGeofenced && (
+              <div
+                role="note"
+                style={{
+                  backgroundColor: '#eff6ff',
+                  border: '1px solid #bfdbfe',
+                  borderLeft: '4px solid #3b82f6',
+                  borderRadius: '6px',
+                  padding: '0.85rem 1rem',
+                  marginBottom: '1.25rem'
+                }}
+              >
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1e40af', marginBottom: '0.2rem' }}>
+                  Location Verification Required
+                </div>
+                <p style={{ margin: 0, fontSize: '0.82rem', color: '#1e3a8a', lineHeight: 1.45 }}>
+                  This document is geofenced. Your browser will request your location when you click Unlock.
+                </p>
+              </div>
+            )}
+
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label
+                htmlFor="totp-code-input"
+                style={{
+                  display: 'block',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  color: '#334155',
+                  marginBottom: '0.4rem'
+                }}
+              >
+                Authenticator MFA Code
+              </label>
+              <input
+                id="totp-code-input"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                autoComplete="one-time-code"
+                placeholder="000000"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                disabled={submitting}
+                style={{
+                  width: '100%',
+                  padding: '0.65rem 0.85rem',
+                  fontSize: '1.25rem',
+                  letterSpacing: '0.3em',
+                  textAlign: 'center',
+                  fontFamily: 'monospace',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '6px',
+                  boxSizing: 'border-box'
+                }}
+              />
+              <p style={{ margin: '0.4rem 0 0 0', fontSize: '0.78rem', color: '#64748b' }}>
+                Use a fresh code. If you just signed in, wait for the next one.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.5rem' }}>
+              <button
+                type="button"
+                onClick={handleBackToScan}
+                disabled={submitting}
+                className="btn btn-secondary"
+                style={{ width: 'auto', padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+              >
+                Scan Again
+              </button>
+
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  onClick={handleModalClose}
+                  disabled={submitting}
+                  className="btn btn-secondary"
+                  style={{ width: 'auto', padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting || code.length !== 6}
+                  className="btn btn-primary"
+                  style={{
+                    width: 'auto',
+                    padding: '0.5rem 1.25rem',
+                    fontSize: '0.85rem',
+                    opacity: submitting || code.length !== 6 ? 0.6 : 1,
+                    cursor: submitting || code.length !== 6 ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {submitting ? 'Decrypting...' : 'Unlock Document'}
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default UnlockModal;

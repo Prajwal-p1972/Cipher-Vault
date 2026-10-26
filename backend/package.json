@@ -1,0 +1,47 @@
+{
+  "name": "cipher-vault-backend",
+  "version": "1.0.0",
+  "description": "Cipher Vault - Zero-Cloud Secure Document Exchange Platform (Phase 1)",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "node --test test/*.test.js",
+    "test:e2e": "node --test test/e2e/phase1.e2e.js",
+    "test:e2e:p2": "node --test test/e2e/phase2.e2e.js",
+    "test:e2e:p3": "node --test test/e2e/phase3.e2e.js",
+    "test:e2e:p4": "node --test test/e2e/phase4.e2e.js",
+    "test:e2e:p6": "node --test test/e2e/phase6.e2e.js"
+  },
+  "keywords": [
+    "security",
+    "zero-cloud",
+    "mfa",
+    "totp",
+    "audit-chain",
+    "jwt"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1146.0",
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^5.0.1",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.9.2",
+    "multer": "^2.4.0",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.4",
+    "speakeasy": "^2.0.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.4"
+  }
+}
