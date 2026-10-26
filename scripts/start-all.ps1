@@ -10,10 +10,22 @@ Write-Host "==========================================================" -Foregro
 Write-Host "   Starting Cipher Vault Local Microservices Stack" -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
-# Helper to test port
+# Helper to test port instantaneously
 function Test-PortOpen($port) {
-    $conn = Test-NetConnection -ComputerName 127.0.0.1 -Port $port -WarningAction SilentlyContinue
-    return $conn.TcpTestSucceeded
+    try {
+        $client = New-Object System.Net.Sockets.TcpClient
+        $iar = $client.BeginConnect("127.0.0.1", $port, $null, $null)
+        $success = $iar.AsyncWaitHandle.WaitOne(200, $false)
+        if ($success -and $client.Connected) {
+            $client.EndConnect($iar)
+            $client.Close()
+            return $true
+        }
+        $client.Close()
+        return $false
+    } catch {
+        return $false
+    }
 }
 
 # Helper to find Ollama
