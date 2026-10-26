@@ -131,10 +131,19 @@ export function useChat(session) {
           signal: controller.signal,
           onSources: (sources) => {
             if (!isMountedRef.current) return;
+            const rawSources = Array.isArray(sources) ? sources : [];
+            const seenPages = new Set();
+            const deduplicated = [];
+            for (const s of rawSources) {
+              if (s && s.page !== undefined && !seenPages.has(s.page)) {
+                seenPages.add(s.page);
+                deduplicated.push(s);
+              }
+            }
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantMsgId
-                  ? { ...m, sources: Array.isArray(sources) ? sources : [] }
+                  ? { ...m, sources: deduplicated }
                   : m
               )
             );
@@ -147,11 +156,20 @@ export function useChat(session) {
               )
             );
           },
-          onDone: () => {
+          onDone: (doneData) => {
             if (!isMountedRef.current) return;
             setMessages((prev) =>
               prev.map((m) =>
-                m.id === assistantMsgId ? { ...m, streaming: false } : m
+                m.id === assistantMsgId
+                  ? {
+                      ...m,
+                      streaming: false,
+                      text:
+                        doneData && typeof doneData.finalText === 'string'
+                          ? doneData.finalText
+                          : m.text
+                    }
+                  : m
               )
             );
           },

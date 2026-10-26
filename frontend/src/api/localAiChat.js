@@ -112,9 +112,10 @@ export function parseSseChunk(rawChunk, state) {
     const lines = rawFrame.split(/\r?\n/);
     for (const line of lines) {
       if (line.startsWith('event:')) {
-        eventType = line.slice(6).trim();
+        eventType = line.startsWith('event: ') ? line.slice(7) : line.slice(6);
       } else if (line.startsWith('data:')) {
-        dataLines.push(line.slice(5).trim());
+        const dataContent = line.startsWith('data: ') ? line.slice(6) : line.slice(5);
+        dataLines.push(dataContent);
       }
     }
 
@@ -141,7 +142,7 @@ export function parseSseChunk(rawChunk, state) {
  *   signal?: AbortSignal,
  *   onSources?: (sources: Array<{ page: number, source: string, score: number }>) => void,
  *   onToken?: (text: string) => void,
- *   onDone?: (stats: object) => void,
+ *   onDone?: (doneData: object) => void,
  *   onError?: (error: Error) => void
  * }} callbacks
  * @returns {Promise<void>}
@@ -224,7 +225,7 @@ export async function streamChat(session, question, callbacks = {}) {
           totalChars += tokenText.length;
         }
       } else if (ev.event === 'done') {
-        onDone?.(ev.data?.stats || ev.data);
+        onDone?.(ev.data);
       } else if (ev.event === 'error') {
         onError?.(new LocalAiChatError(500, ev.data?.message || 'Streaming error'));
       }
@@ -241,45 +242,45 @@ export async function streamChat(session, question, callbacks = {}) {
   try {
     while (true) {
       const { value, done } = await reader.read();
-      if (done) break;
+      const chunk = done ? decoder.decode() : decoder.decode(value, { stream: true });
+      if (chunk) {
+        const events = parseSseChunk(chunk, sseState);
 
-      const chunk = decoder.decode(value, { stream: true });
-      const events = parseSseChunk(chunk, sseState);
-
-      for (const ev of events) {
-        if (ev.event === 'sources') {
-          onSources?.(ev.data?.sources || ev.data);
-        } else if (ev.event === 'token') {
-          if (capped) continue;
-          const tokenText = ev.data?.text ?? '';
-          if (totalChars + tokenText.length >= MAX_ANSWER_CHARS) {
-            const allowed = Math.max(0, MAX_ANSWER_CHARS - totalChars);
-            if (allowed > 0) {
-              onToken?.(tokenText.slice(0, allowed));
-              totalChars += allowed;
+        for (const ev of events) {
+          if (ev.event === 'sources') {
+            onSources?.(ev.data?.sources || ev.data);
+          } else if (ev.event === 'token') {
+            if (capped) continue;
+            const tokenText = ev.data?.text ?? '';
+            if (totalChars + tokenText.length >= MAX_ANSWER_CHARS) {
+              const allowed = Math.max(0, MAX_ANSWER_CHARS - totalChars);
+              if (allowed > 0) {
+                onToken?.(tokenText.slice(0, allowed));
+                totalChars += allowed;
+              }
+              capped = true;
+              try {
+                await reader.cancel();
+              } catch (_) {}
+              break;
+            } else {
+              onToken?.(tokenText);
+              totalChars += tokenText.length;
             }
-            capped = true;
+          } else if (ev.event === 'done') {
+            onDone?.(ev.data);
+          } else if (ev.event === 'error') {
+            const err = new LocalAiChatError(500, ev.data?.message || 'Streaming error');
+            onError?.(err);
             try {
               await reader.cancel();
             } catch (_) {}
-            break;
-          } else {
-            onToken?.(tokenText);
-            totalChars += tokenText.length;
+            return;
           }
-        } else if (ev.event === 'done') {
-          onDone?.(ev.data?.stats || ev.data);
-        } else if (ev.event === 'error') {
-          const err = new LocalAiChatError(500, ev.data?.message || 'Streaming error');
-          onError?.(err);
-          try {
-            await reader.cancel();
-          } catch (_) {}
-          return;
         }
       }
 
-      if (capped) {
+      if (done || capped) {
         break;
       }
     }

@@ -114,22 +114,22 @@ class ChatService:
         # --- LLM streaming ---
         answer_parts: list[str] = []
         async for token in stream_chat(messages, self._cfg):
-            clean = sanitize_answer(token)
-            if clean:
-                answer_parts.append(clean)
-                yield _sse_event("token", {"text": clean})
+            if token:
+                answer_parts.append(token)
+                yield _sse_event("token", {"text": token})
 
-        full_answer = "".join(answer_parts)
+        full_raw = "".join(answer_parts)
+        final_text = sanitize_answer(full_raw)
 
         # --- persist history only on success ---
         session.chat_history.append({"role": "user", "content": question})
-        session.chat_history.append({"role": "assistant", "content": full_answer})
+        session.chat_history.append({"role": "assistant", "content": final_text})
 
         max_msgs = self._cfg.max_history_turns * 2
         while len(session.chat_history) > max_msgs:
             session.chat_history.popleft()
 
-        yield _sse_event("done", {})
+        yield _sse_event("done", {"stats": {}, "finalText": final_text})
 
     async def answer_stream(
         self,

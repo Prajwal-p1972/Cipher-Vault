@@ -29,6 +29,12 @@ _CONTROL_CHARS_PATTERN = re.compile(
     r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]"
 )
 
+# Strip fake/hallucinated inline citations e.g. [p.99] or [p. 1]
+_FAKE_CITATION_PATTERN = re.compile(
+    r"\s*\[p\.\s*\d+\]",
+    re.IGNORECASE,
+)
+
 
 def _normalize(text: str) -> str:
     """NFC-normalize and strip leading/trailing whitespace."""
@@ -62,10 +68,11 @@ def is_question_valid(question: str, cfg: Settings | None = None) -> tuple[bool,
 
 
 def sanitize_answer(text: str) -> str:
-    """Remove control characters and NFC-normalize an LLM-generated answer.
+    """Remove control characters, fake citation tags, and NFC-normalize an LLM answer.
 
-    Does not truncate or alter the semantic content; only strips characters
-    that could cause UI injection or terminal escape sequences.
+    Does not truncate or alter semantic content; only strips characters that could
+    cause UI injection, terminal escapes, or hallucinated citation markers.
     """
     cleaned = _CONTROL_CHARS_PATTERN.sub("", text)
+    cleaned = _FAKE_CITATION_PATTERN.sub("", cleaned)
     return _normalize(cleaned)

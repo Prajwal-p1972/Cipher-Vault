@@ -113,4 +113,30 @@ describe('ChatPanel Component Security & Interaction Tests', () => {
       expect(screen.queryAllByText('Existing conversation answer').length).toBe(0);
     });
   });
+
+  it('deduplicates page chips when sources contain multiple chunks from the same page', async () => {
+    vi.spyOn(chatApi, 'streamChat').mockImplementation(async (session, q, callbacks) => {
+      callbacks.onSources?.([
+        { page: 4, source: 'spec.pdf', score: 0.95 },
+        { page: 4, source: 'spec.pdf', score: 0.85 },
+        { page: 9, source: 'spec.pdf', score: 0.75 }
+      ]);
+      callbacks.onToken?.('Answer referencing page 4 multiple times.');
+      callbacks.onDone?.({});
+    });
+
+    render(<ChatPanel session={mockSession} />);
+    const textarea = screen.getByPlaceholderText(/Ask a question about this document/i);
+    fireEvent.change(textarea, { target: { value: 'Explain section 4' } });
+    fireEvent.click(screen.getByRole('button', { name: /Send question/i }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Answer referencing page 4 multiple times.').length).toBeGreaterThanOrEqual(1);
+    });
+
+    const chips = screen.getAllByTestId('page-chip');
+    expect(chips.length).toBe(2);
+    expect(chips[0].textContent).toBe('p.4');
+    expect(chips[1].textContent).toBe('p.9');
+  });
 });

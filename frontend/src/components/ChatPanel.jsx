@@ -185,9 +185,15 @@ export function ChatPanel({ session }) {
                   }}
                 >
                   <span style={{ fontWeight: 600 }}>Sources:</span>
-                  {m.sources.map((s, idx) => (
+                  {Array.from(
+                    new Map(
+                      m.sources
+                        .filter((s) => s && s.page !== undefined)
+                        .map((s) => [s.page, s])
+                    ).values()
+                  ).map((s, idx) => (
                     <span
-                      key={idx}
+                      key={s.page ?? idx}
                       data-testid="page-chip"
                       style={{
                         backgroundColor: '#334155',

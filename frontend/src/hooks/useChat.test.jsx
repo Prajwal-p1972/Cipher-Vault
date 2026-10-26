@@ -154,4 +154,52 @@ describe('useChat Hook Lifecycle & Security Tests', () => {
     expect(localStorageSpy).not.toHaveBeenCalled();
     expect(consoleLogSpy).not.toHaveBeenCalled();
   });
+
+  it('replaces streamed message text with finalText from doneData and removes fake citations', async () => {
+    vi.spyOn(chatApi, 'streamChat').mockImplementation(async (session, q, callbacks) => {
+      // Simulate raw tokens streamed including fake citation [p.99]
+      callbacks.onToken?.('According to section A ');
+      callbacks.onToken?.('[p.99]');
+      callbacks.onToken?.(' the system is secure.');
+      // onDone carries sanitized finalText with [p.99] removed
+      callbacks.onDone?.({
+        stats: {},
+        finalText: 'According to section A the system is secure.'
+      });
+    });
+
+    const { result } = renderHook(() => useChat(mockSession));
+
+    await act(async () => {
+      await result.current.ask('Check system status');
+    });
+
+    const assistantMsg = result.current.messages[1];
+    expect(assistantMsg.role).toBe('assistant');
+    expect(assistantMsg.text).toBe('According to section A the system is secure.');
+    expect(assistantMsg.text).not.toContain('[p.99]');
+    expect(assistantMsg.streaming).toBe(false);
+  });
+
+  it('de-duplicates source page chips by page number in useChat', async () => {
+    vi.spyOn(chatApi, 'streamChat').mockImplementation(async (session, q, callbacks) => {
+      callbacks.onSources?.([
+        { page: 2, source: 'audit.pdf', score: 0.9 },
+        { page: 2, source: 'audit_annex.pdf', score: 0.8 },
+        { page: 5, source: 'audit.pdf', score: 0.7 }
+      ]);
+      callbacks.onToken?.('Answer text');
+      callbacks.onDone?.({});
+    });
+
+    const { result } = renderHook(() => useChat(mockSession));
+
+    await act(async () => {
+      await result.current.ask('Check sources');
+    });
+
+    const assistantMsg = result.current.messages[1];
+    expect(assistantMsg.sources.length).toBe(2);
+    expect(assistantMsg.sources.map((s) => s.page)).toEqual([2, 5]);
+  });
 });

@@ -182,4 +182,89 @@ describe('localAiChat API Client & SSE Parser Tests', () => {
       }
     );
   });
+
+  it('SSE parser preserves leading-space, whitespace-only, and newline tokens', () => {
+    const state = { buffer: '' };
+    const raw = [
+      'event: token\ndata: {"text":"According"}\n\n',
+      'event: token\ndata: {"text":" to"}\n\n',
+      'event: token\ndata: {"text":" the"}\n\n',
+      'event: token\ndata: {"text":" doc"}\n\n',
+      'event: token\ndata: {"text":"."}\n\n',
+      'event: token\ndata: {"text":"\\n\\n"}\n\n',
+      'event: token\ndata: {"text":"Next"}\n\n',
+      'event: token\ndata: {"text":" line"}\n\n'
+    ].join('');
+
+    const events = parseSseChunk(raw, state);
+    const tokens = events.filter((e) => e.event === 'token').map((e) => e.data.text);
+    expect(tokens).toEqual(['According', ' to', ' the', ' doc', '.', '\n\n', 'Next', ' line']);
+    expect(tokens.join('')).toBe('According to the doc.\n\nNext line');
+  });
+
+  it('SSE parser strips only ONE leading space after data: and preserves exact token whitespace', () => {
+    const state = { buffer: '' };
+    // "data: {"text":"one"}" -> 1 space stripped, valid JSON
+    // "data:{"text":"two"}" -> 0 spaces stripped, valid JSON
+    const chunk = 'data: {"text":"with space"}\n\ndata:{"text":"no space"}\n\n';
+    const events = parseSseChunk(chunk, state);
+    expect(events.length).toBe(2);
+    expect(events[0].data).toEqual({ text: 'with space' });
+    expect(events[1].data).toEqual({ text: 'no space' });
+  });
+
+  it('handles multi-byte UTF-8 sequences split across reader chunks without corruption', async () => {
+    // UTF-8 for euro sign € is [0xE2, 0x82, 0xAC]
+    // We stream: 'event: token\ndata: {"text":"Price: ' + [0xE2] then [0x82, 0xAC] + '100"}\n\n'
+    const part1 = new TextEncoder().encode('event: token\ndata: {"text":"Price: ');
+    const part2 = new Uint8Array([0xE2]); // first byte of 3-byte char
+    const part3 = new Uint8Array([0x82, 0xAC]); // remaining 2 bytes
+    const part4 = new TextEncoder().encode('100"}\n\nevent: done\ndata: {"finalText":"Price: €100"}\n\n');
+
+    // Combine into 2 chunks
+    const chunk1 = new Uint8Array(part1.length + part2.length);
+    chunk1.set(part1, 0);
+    chunk1.set(part2, part1.length);
+
+    const chunk2 = new Uint8Array(part3.length + part4.length);
+    chunk2.set(part3, 0);
+    chunk2.set(part4, part3.length);
+
+    let readCount = 0;
+    const mockBody = {
+      getReader: () => ({
+        read: async () => {
+          readCount++;
+          if (readCount === 1) return { done: false, value: chunk1 };
+          if (readCount === 2) return { done: false, value: chunk2 };
+          return { done: true, value: undefined };
+        },
+        releaseLock: vi.fn(),
+        cancel: vi.fn()
+      })
+    };
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: mockBody
+    });
+
+    const receivedTokens = [];
+    let doneData = null;
+
+    await streamChat(
+      { sessionId: 'sid', token: 'tok' },
+      'Price query',
+      {
+        onToken: (t) => receivedTokens.push(t),
+        onDone: (d) => {
+          doneData = d;
+        }
+      }
+    );
+
+    expect(receivedTokens.join('')).toBe('Price: €100');
+    expect(doneData).toEqual({ finalText: 'Price: €100' });
+  });
 });
