@@ -24,6 +24,10 @@ if (isTestEnv) {
     process.env.MFA_ENC_KEY || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
   process.env.AUDIT_HMAC_KEY =
     process.env.AUDIT_HMAC_KEY || 'test_audit_hmac_key_min_32_characters_abcde';
+  process.env.AWS_REGION = process.env.AWS_REGION || 'us-east-1';
+  process.env.AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID || 'mock_access_key_id';
+  process.env.AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY || 'mock_secret_access_key';
+  process.env.AWS_S3_BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME || 'mock-cipher-vault-bucket';
 }
 
 const envSchema = z.object({
@@ -35,6 +39,10 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(32, 'JWT_REFRESH_SECRET must be at least 32 characters'),
   MFA_ENC_KEY: z.string().regex(/^[0-9a-fA-F]{64}$/, 'MFA_ENC_KEY must be exactly 64 hex characters (32 bytes)'),
   AUDIT_HMAC_KEY: z.string().min(32, 'AUDIT_HMAC_KEY must be at least 32 characters'),
+  AWS_REGION: z.string().min(1, 'AWS_REGION is required'),
+  AWS_ACCESS_KEY_ID: z.string().min(1, 'AWS_ACCESS_KEY_ID is required'),
+  AWS_SECRET_ACCESS_KEY: z.string().min(1, 'AWS_SECRET_ACCESS_KEY is required'),
+  AWS_S3_BUCKET_NAME: z.string().min(1, 'AWS_S3_BUCKET_NAME is required'),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(30),
   MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(26214400),
   MAX_DECOMPRESSED_BYTES: z.coerce.number().int().positive().default(104857600),

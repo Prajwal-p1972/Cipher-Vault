@@ -39,7 +39,7 @@ const documentSchema = new mongoose.Schema(
     },
     sizeBytes: {
       type: Number,
-      required: true,
+      default: 0,
       min: 0
     },
     storage: {
@@ -72,7 +72,7 @@ const documentSchema = new mongoose.Schema(
       },
       ciphertextSha256: {
         type: String,
-        required: true
+        default: null
       },
       compressed: {
         type: Boolean,

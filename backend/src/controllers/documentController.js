@@ -1,5 +1,11 @@
+import busboy from 'busboy';
 import { z } from 'zod';
 import { AppError } from '../utils/errors.js';
+import { createEncryptionStream } from '../utils/cryptoStream.js';
+import { uploadEncryptedStream } from '../services/storageService.js';
+import { Document } from '../models/Document.js';
+import { audit } from '../services/auditService.js';
+import { notifyUser } from '../config/socket.js';
 import {
   sealDocument,
   listMyDocuments,
@@ -257,3 +263,91 @@ export async function openDocument(req, res) {
 
   res.end(buffer);
 }
+
+export const uploadDocument = (req, res, next) => {
+  const bb = busboy({ headers: req.headers, limits: { files: 1 } });
+  
+  let metadata = {};
+  let fileProcessed = false;
+
+  bb.on('field', (name, val) => {
+    try {
+      metadata[name] = JSON.parse(val);
+    } catch {
+      metadata[name] = val;
+    }
+  });
+
+  bb.on('file', async (name, fileStream, info) => {
+    fileProcessed = true;
+    try {
+      if (!metadata.receiver) {
+        fileStream.resume(); // Drain stream to avoid hanging
+        return next(AppError.badRequest('Receiver ID is required'));
+      }
+
+      const cryptoPipeline = createEncryptionStream();
+      
+      // Stream directly: HTTP Request -> Gzip -> AES-256-GCM -> AWS S3
+      const { objectKey, authTag } = await uploadEncryptedStream(fileStream, cryptoPipeline);
+
+      // Save metadata to MongoDB. The AES Key is NEVER saved.
+      const doc = await Document.create({
+        sender: req.user._id,
+        receiver: metadata.receiver,
+        originalName: info.filename,
+        mimeType: info.mimeType,
+        storage: { provider: 's3', key: objectKey },
+        crypto: {
+          algorithm: 'aes-256-gcm',
+          iv: cryptoPipeline.iv.toString('base64'),
+          authTag: authTag.toString('base64'),
+          compressed: true
+        },
+        policy: metadata.policy || {},
+        status: 'sealed'
+      });
+
+      await audit({
+        actor: req.user._id,
+        action: 'DOC_SEALED',
+        resource: { kind: 'Document', id: doc._id },
+        outcome: 'success',
+        ip: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+
+      // Notify the receiver in real-time
+      notifyUser(metadata.receiver, 'vault_package_received', {
+        docId: doc._id,
+        sender: req.user._id,
+        originalName: info.filename,
+        timestamp: doc.createdAt
+      });
+
+      // Return the Key and IV to the sender so they can be embedded in the QR Code
+      res.status(201).json({
+        docId: doc._id,
+        qrPayload: {
+          key: cryptoPipeline.key.toString('base64'),
+          iv: cryptoPipeline.iv.toString('base64'),
+          authTag: authTag.toString('base64')
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  bb.on('close', () => {
+    if (!fileProcessed) {
+      next(AppError.badRequest('No file was uploaded'));
+    }
+  });
+
+  bb.on('error', (err) => {
+    next(err);
+  });
+
+  req.pipe(bb);
+};

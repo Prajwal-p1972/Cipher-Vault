@@ -14,6 +14,7 @@ from app.schemas import (
     ExtractionLimitError,
     UnsupportedTypeError,
 )
+from app.retrieval import bm25_store
 from app.sessions import SessionManager
 from app.vectorstore import SessionStore
 
@@ -79,12 +80,16 @@ async def _run_extraction_pipeline(
     if chunks:
         chunk_texts = [c.text for c in chunks]
         embeddings = await asyncio.to_thread(embed_texts, chunk_texts)
-
     vector_store.add_chunks(
         session_id=session_id,
         doc_id=doc_id,
         chunks=chunks,
         embeddings=embeddings,
+    )
+    bm25_store.add_chunks(
+        session_id=session_id,
+        doc_id=doc_id,
+        chunks=chunks,
     )
     await session_manager.add_doc_id(session_id, doc_id)
 

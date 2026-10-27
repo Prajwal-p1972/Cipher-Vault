@@ -10,6 +10,7 @@ import secrets
 import time
 from typing import Callable, Optional
 from app.config import Settings, get_settings
+from app.retrieval import bm25_store
 from app.schemas import ExtractionLimitError
 from app.vectorstore import SessionStore
 
@@ -41,6 +42,8 @@ class Session:
     """Per-session mutex ensuring only one LLM stream runs at a time."""
     chat_timestamps: deque = field(default_factory=deque)
     """Monotonic timestamps of recent chat requests for rate-limit enforcement."""
+    summary_cache: dict[str, str] = field(default_factory=dict)
+    """In-memory whole-document summary cache mapping mode ('summary' | 'detailed') to text."""
 
 
 class SessionManager:
@@ -73,6 +76,7 @@ class SessionManager:
             for sid in expired_ids:
                 self._sessions.pop(sid, None)
                 self._vector_store.delete(sid)
+                bm25_store.delete(sid)
 
             # Evict oldest active session if max_sessions reached
             if len(self._sessions) >= self._settings.max_sessions:
@@ -82,6 +86,7 @@ class SessionManager:
                 )
                 self._sessions.pop(oldest_sid, None)
                 self._vector_store.delete(oldest_sid)
+                bm25_store.delete(oldest_sid)
                 logger.info("Evicted oldest session due to max_sessions cap.")
 
             session_id = secrets.token_urlsafe(32)
@@ -111,6 +116,7 @@ class SessionManager:
             if now > session.expires_at:
                 self._sessions.pop(session_id, None)
                 self._vector_store.delete(session_id)
+                bm25_store.delete(session_id)
                 raise AuthError("Invalid or expired session.")
 
             input_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
@@ -131,6 +137,7 @@ class SessionManager:
             if self._clock() > session.expires_at:
                 self._sessions.pop(session_id, None)
                 self._vector_store.delete(session_id)
+                bm25_store.delete(session_id)
                 return None
             return session
 
@@ -146,17 +153,19 @@ class SessionManager:
                 )
 
     async def add_doc_id(self, session_id: str, doc_id: str) -> None:
-        """Register an ingested document ID against the session."""
+        """Register an ingested document ID against the session and clear summary cache."""
         async with self._lock:
             session = self._sessions.get(session_id)
             if session is not None:
                 session.doc_ids.add(doc_id)
+                session.summary_cache.clear()
 
     async def delete(self, session_id: str) -> bool:
-        """Explicitly terminate a session and purge its vector collection."""
+        """Explicitly terminate a session and purge its vector collection and BM25 index."""
         async with self._lock:
             removed = self._sessions.pop(session_id, None) is not None
             self._vector_store.delete(session_id)
+            bm25_store.delete(session_id)
             return removed
 
     async def reap_expired(self) -> int:
@@ -169,6 +178,7 @@ class SessionManager:
             for sid in expired_ids:
                 self._sessions.pop(sid, None)
                 self._vector_store.delete(sid)
+                bm25_store.delete(sid)
             if expired_ids:
                 logger.info("Reaped %d expired sessions.", len(expired_ids))
             return len(expired_ids)
@@ -204,8 +214,9 @@ class SessionManager:
             self._reaper_task = None
 
     async def wipe_all(self) -> None:
-        """Purge all active sessions and vector collections."""
+        """Purge all active sessions, vector collections, and BM25 indexes."""
         await self.stop_reaper()
         async with self._lock:
             self._sessions.clear()
             self._vector_store.reset()
+            bm25_store.clear()

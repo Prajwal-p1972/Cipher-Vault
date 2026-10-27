@@ -77,7 +77,7 @@ export function useChat(session) {
 
   // Submit a question to the active session
   const ask = useCallback(
-    async (question) => {
+    async (question, mode = 'auto') => {
       if (typeof question !== 'string') return;
       const trimmed = question.trim();
 
@@ -116,6 +116,7 @@ export function useChat(session) {
         role: 'assistant',
         text: '',
         sources: [],
+        progress: null,
         streaming: true
       };
 
@@ -127,70 +128,87 @@ export function useChat(session) {
       abortControllerRef.current = controller;
 
       try {
-        await streamChat(session, trimmed, {
-          signal: controller.signal,
-          onSources: (sources) => {
-            if (!isMountedRef.current) return;
-            const rawSources = Array.isArray(sources) ? sources : [];
-            const seenPages = new Set();
-            const deduplicated = [];
-            for (const s of rawSources) {
-              if (s && s.page !== undefined && !seenPages.has(s.page)) {
-                seenPages.add(s.page);
-                deduplicated.push(s);
+        await streamChat(
+          session,
+          trimmed,
+          {
+            signal: controller.signal,
+            mode,
+            onSources: (sources) => {
+              if (!isMountedRef.current) return;
+              const rawSources = Array.isArray(sources) ? sources : [];
+              const seenPages = new Set();
+              const deduplicated = [];
+              for (const s of rawSources) {
+                if (s && s.page !== undefined && !seenPages.has(s.page)) {
+                  seenPages.add(s.page);
+                  deduplicated.push(s);
+                }
               }
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMsgId
+                    ? { ...m, sources: deduplicated }
+                    : m
+                )
+              );
+            },
+            onProgress: (prog) => {
+              if (!isMountedRef.current) return;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMsgId
+                    ? { ...m, progress: prog }
+                    : m
+                )
+              );
+            },
+            onToken: (tokenText) => {
+              if (!isMountedRef.current) return;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMsgId ? { ...m, text: m.text + tokenText } : m
+                )
+              );
+            },
+            onDone: (doneData) => {
+              if (!isMountedRef.current) return;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMsgId
+                    ? {
+                        ...m,
+                        streaming: false,
+                        progress: null,
+                        text:
+                          doneData && typeof doneData.finalText === 'string'
+                            ? doneData.finalText
+                            : m.text
+                      }
+                    : m
+                )
+              );
+            },
+            onError: (streamErr) => {
+              if (!isMountedRef.current) return;
+              const mapped = mapChatError(streamErr);
+              setError(mapped);
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMsgId
+                    ? {
+                        ...m,
+                        streaming: false,
+                        progress: null,
+                        error: true,
+                        text: m.text || mapped
+                      }
+                    : m
+                )
+              );
             }
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantMsgId
-                  ? { ...m, sources: deduplicated }
-                  : m
-              )
-            );
-          },
-          onToken: (tokenText) => {
-            if (!isMountedRef.current) return;
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantMsgId ? { ...m, text: m.text + tokenText } : m
-              )
-            );
-          },
-          onDone: (doneData) => {
-            if (!isMountedRef.current) return;
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantMsgId
-                  ? {
-                      ...m,
-                      streaming: false,
-                      text:
-                        doneData && typeof doneData.finalText === 'string'
-                          ? doneData.finalText
-                          : m.text
-                    }
-                  : m
-              )
-            );
-          },
-          onError: (streamErr) => {
-            if (!isMountedRef.current) return;
-            const mapped = mapChatError(streamErr);
-            setError(mapped);
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantMsgId
-                  ? {
-                      ...m,
-                      streaming: false,
-                      error: true,
-                      text: m.text || mapped
-                    }
-                  : m
-              )
-            );
           }
-        });
+        );
       } catch (err) {
         if (!isMountedRef.current) return;
         if (controller.signal.aborted) {

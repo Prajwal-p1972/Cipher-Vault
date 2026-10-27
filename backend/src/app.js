@@ -5,7 +5,7 @@ import cookieParser from 'cookie-parser';
 import { env } from './config/env.js';
 import authRoutes from './routes/auth.js';
 import auditRoutes from './routes/audit.js';
-import documentRoutes from './routes/documents.js';
+import documentRoutes from './routes/documentRoutes.js';
 import analyticsRoutes from './routes/analytics.js';
 import { notFound, errorHandler } from './middleware/error.js';
 

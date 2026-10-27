@@ -139,4 +139,107 @@ describe('ChatPanel Component Security & Interaction Tests', () => {
     expect(chips[0].textContent).toBe('p.4');
     expect(chips[1].textContent).toBe('p.9');
   });
+
+  it('Summarize document and Detailed summary buttons send the correct modes and question text', async () => {
+    const streamSpy = vi.spyOn(chatApi, 'streamChat').mockImplementation(async (session, q, callbacks) => {
+      callbacks.onToken?.('Summary result.');
+      callbacks.onDone?.({});
+    });
+
+    render(<ChatPanel session={mockSession} />);
+
+    // 1. Click "Summarize document"
+    const summaryBtn = screen.getByRole('button', { name: /Summarize document/i });
+    fireEvent.click(summaryBtn);
+
+    expect(streamSpy).toHaveBeenCalledWith(
+      mockSession,
+      'Summarize document',
+      expect.objectContaining({ mode: 'summary' })
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Summary result.').length).toBeGreaterThanOrEqual(1);
+    });
+
+    // 2. Click "Detailed summary"
+    const detailedBtn = screen.getByRole('button', { name: /Detailed summary/i });
+    fireEvent.click(detailedBtn);
+
+    expect(streamSpy).toHaveBeenCalledWith(
+      mockSession,
+      'Detailed summary of document',
+      expect.objectContaining({ mode: 'detailed' })
+    );
+  });
+
+  it('renders progress indicator when progress SSE events are received and finalText replaces streamed text', async () => {
+    let capturedCallbacks;
+    vi.spyOn(chatApi, 'streamChat').mockImplementation(async (session, q, callbacks) => {
+      capturedCallbacks = callbacks;
+    });
+
+    render(<ChatPanel session={mockSession} />);
+
+    const detailedBtn = screen.getByRole('button', { name: /Detailed summary/i });
+    fireEvent.click(detailedBtn);
+
+    // Emit progress event
+    await waitFor(() => {
+      expect(capturedCallbacks).toBeDefined();
+    });
+
+    capturedCallbacks.onProgress?.({ step: 2, of: 5 });
+
+    await waitFor(() => {
+      const progressEl = screen.getByTestId('summary-progress');
+      expect(progressEl.textContent).toBe('Summarizing... step 2 of 5');
+    });
+
+    // Stream initial tokens
+    capturedCallbacks.onToken?.('Draft stream text');
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/Draft stream text/).length).toBeGreaterThanOrEqual(1);
+    });
+
+    // Complete with finalText
+    capturedCallbacks.onDone?.({ finalText: 'Polished sanitized final text.' });
+
+    await waitFor(() => {
+      expect(screen.queryByText('Draft stream text')).toBeNull();
+      expect(screen.getAllByText('Polished sanitized final text.').length).toBeGreaterThanOrEqual(1);
+      expect(screen.queryByTestId('summary-progress')).toBeNull();
+    });
+  });
+
+  it('auto-detects typed questions and preserves zero storage/console leakage', async () => {
+    const streamSpy = vi.spyOn(chatApi, 'streamChat').mockImplementation(async (session, q, callbacks) => {
+      callbacks.onToken?.('Regular answer');
+      callbacks.onDone?.({ finalText: 'Regular answer' });
+    });
+
+    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem');
+    const consoleLogSpy = vi.spyOn(console, 'log');
+
+    render(<ChatPanel session={mockSession} />);
+
+    const textarea = screen.getByPlaceholderText(/Ask a question about this document/i);
+    fireEvent.change(textarea, { target: { value: 'what is this pdf about' } });
+    fireEvent.click(screen.getByRole('button', { name: /Send question/i }));
+
+    expect(streamSpy).toHaveBeenCalledWith(
+      mockSession,
+      'what is this pdf about',
+      expect.objectContaining({ mode: 'auto' })
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Regular answer').length).toBeGreaterThanOrEqual(1);
+    });
+
+    expect(setItemSpy).not.toHaveBeenCalled();
+    expect(consoleLogSpy).not.toHaveBeenCalled();
+  });
 });
+

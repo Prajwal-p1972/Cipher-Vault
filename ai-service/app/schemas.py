@@ -11,6 +11,7 @@ class PageText:
     text: str
     source: str
     ocr: bool
+    kind: str = "text"
 
 
 @dataclass(slots=True)
@@ -31,6 +32,8 @@ class Chunk:
     page: int
     source: str
     index: int
+    section: str = ""
+    kind: str = "text"
 
 
 class UnsupportedTypeError(Exception):

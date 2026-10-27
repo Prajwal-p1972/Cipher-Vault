@@ -1,206 +1,375 @@
 import './setup.js';
-import { describe, it } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import {
-  getStorage,
-  generateStorageKey,
-  resetStorage,
-  MemoryStorage,
-  DiskStorage
-} from '../src/services/storage/index.js';
+import { Readable, PassThrough } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import crypto from 'node:crypto';
+import { createEncryptionStream, createDecryptionStream } from '../src/utils/cryptoStream.js';
+import { uploadEncryptedStream, downloadEncryptedStream } from '../src/services/storageService.js';
+import { s3Client } from '../src/config/aws.js';
+import { env } from '../src/config/env.js';
 
-describe('Storage Adapter Tests', () => {
-  it('generates storage keys matching docs/<uuid>.bin', () => {
-    const key = generateStorageKey();
-    assert.match(
-      key,
-      /^docs\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.bin$/
-    );
+describe('Phase 2: Cryptographic Engine & AWS S3 Storage Pipeline', () => {
+  let originalSend;
 
-    const key2 = generateStorageKey();
-    assert.notStrictEqual(key, key2);
+  beforeEach(() => {
+    originalSend = s3Client.send;
   });
 
-  it('provides singleton instance via getStorage matching configured memory driver', () => {
-    resetStorage();
-    const storage1 = getStorage();
-    const storage2 = getStorage();
-
-    assert.strictEqual(storage1, storage2);
-    assert.ok(storage1 instanceof MemoryStorage);
+  afterEach(() => {
+    s3Client.send = originalSend;
   });
 
-  it('supports put, get, exists, and delete operations on memory driver', async () => {
-    const storage = new MemoryStorage();
-    const key = generateStorageKey();
-    const payload = Buffer.from('confidential vault content');
+  describe('createEncryptionStream', () => {
+    it('produces a unique 256-bit Key and 96-bit IV on each invocation', () => {
+      const pipeline1 = createEncryptionStream();
+      const pipeline2 = createEncryptionStream();
 
-    // Initially does not exist
-    assert.strictEqual(await storage.exists(key), false);
-    assert.strictEqual(await storage.get(key), null);
+      assert.ok(Buffer.isBuffer(pipeline1.key), 'Key should be a Buffer');
+      assert.strictEqual(pipeline1.key.length, 32, 'Key must be exactly 32 bytes (256-bit)');
 
-    // Put data
-    await storage.put(key, payload);
-    assert.strictEqual(await storage.exists(key), true);
+      assert.ok(Buffer.isBuffer(pipeline1.iv), 'IV should be a Buffer');
+      assert.strictEqual(pipeline1.iv.length, 12, 'IV must be exactly 12 bytes (96-bit nonce)');
 
-    // Get data
-    const retrieved = await storage.get(key);
-    assert.ok(Buffer.isBuffer(retrieved));
-    assert.deepStrictEqual(retrieved, payload);
+      assert.ok(Buffer.isBuffer(pipeline2.key), 'Second key should be a Buffer');
+      assert.strictEqual(pipeline2.key.length, 32, 'Second key must be exactly 32 bytes');
 
-    // Delete data
-    const deleted = await storage.delete(key);
-    assert.strictEqual(deleted, true);
-    assert.strictEqual(await storage.exists(key), false);
-    assert.strictEqual(await storage.get(key), null);
+      assert.ok(Buffer.isBuffer(pipeline2.iv), 'Second IV should be a Buffer');
+      assert.strictEqual(pipeline2.iv.length, 12, 'Second IV must be exactly 12 bytes');
 
-    // Delete again returns false
-    const deletedAgain = await storage.delete(key);
-    assert.strictEqual(deletedAgain, false);
-  });
-
-  it('guarantees strict copy-isolation on both put and get', async () => {
-    const storage = new MemoryStorage();
-    const key = generateStorageKey();
-
-    // 1. Isolation on put: mutating input buffer does NOT alter stored data
-    const inputBuffer = Buffer.from('immutable payload');
-    await storage.put(key, inputBuffer);
-
-    inputBuffer[0] = 0x58; // mutate 'i' to 'X'
-    const fetched1 = await storage.get(key);
-    assert.strictEqual(fetched1.toString('utf8'), 'immutable payload');
-
-    // 2. Isolation on get: mutating retrieved buffer does NOT alter stored data
-    fetched1[0] = 0x59; // mutate 'i' to 'Y'
-    const fetched2 = await storage.get(key);
-    assert.strictEqual(fetched2.toString('utf8'), 'immutable payload');
-  });
-
-  it('throws on invalid keys or non-Buffer payloads', async () => {
-    const storage = new MemoryStorage();
-
-    await assert.rejects(
-      async () => storage.put('', Buffer.from('data')),
-      /Storage key must be a non-empty string/i
-    );
-
-    await assert.rejects(
-      async () => storage.put('valid-key', 'string-instead-of-buffer'),
-      /Storage payload must be a Buffer/i
-    );
-
-    await assert.rejects(
-      async () => storage.get(''),
-      /Storage key must be a non-empty string/i
-    );
-
-    await assert.rejects(
-      async () => storage.exists(123),
-      /Storage key must be a non-empty string/i
-    );
-
-    await assert.rejects(
-      async () => storage.delete(null),
-      /Storage key must be a non-empty string/i
-    );
-  });
-
-  describe('DiskStorage Driver Tests', () => {
-    const testDir = path.join(os.tmpdir(), `cipher-vault-test-disk-${Date.now()}`);
-
-    it('supports round trip: put, get, exists, delete', async () => {
-      const storage = new DiskStorage(testDir);
-      const key = generateStorageKey();
-      const payload = Buffer.from('encrypted-vault-blob-bytes-12345');
-
-      assert.strictEqual(await storage.exists(key), false);
-      assert.strictEqual(await storage.get(key), null);
-
-      await storage.put(key, payload);
-      assert.strictEqual(await storage.exists(key), true);
-
-      const retrieved = await storage.get(key);
-      assert.ok(Buffer.isBuffer(retrieved));
-      assert.deepStrictEqual(retrieved, payload);
-
-      const deleted = await storage.delete(key);
-      assert.strictEqual(deleted, true);
-      assert.strictEqual(await storage.exists(key), false);
-      assert.strictEqual(await storage.get(key), null);
+      assert.notDeepStrictEqual(
+        pipeline1.key,
+        pipeline2.key,
+        'Consecutive encryption streams must generate unique keys'
+      );
+      assert.notDeepStrictEqual(
+        pipeline1.iv,
+        pipeline2.iv,
+        'Consecutive encryption streams must generate unique IVs'
+      );
     });
 
-    it('rejects path traversal attempts and invalid key formats', async () => {
-      const storage = new DiskStorage(testDir);
-      const payload = Buffer.from('traversal-test');
+    it('pipes a string through compression and AES-256-GCM encryption, generating an auth tag', async () => {
+      const { cipher, compressor, key, iv } = createEncryptionStream();
+      const fakePlaintext = 'Confidential payload streamed through gzip and AES-256-GCM';
 
-      const traversalAttempts = [
-        '../x',
-        '../../secret.txt',
-        '/etc/passwd',
-        'C:\\Windows\\system32',
-        'docs\\backslashes.bin',
-        'docs/not-a-uuid.bin',
-        'docs/../evil.bin',
-        'docs/12345.bin'
-      ];
+      let authTag = null;
+      cipher.on('end', () => {
+        authTag = cipher.getAuthTag();
+      });
 
-      for (const badKey of traversalAttempts) {
-        await assert.rejects(
-          async () => storage.put(badKey, payload),
-          /Invalid storage key format/i,
-          `Expected key "${badKey}" to be rejected on put`
-        );
+      const encryptedChunks = [];
+      const captureStream = new PassThrough();
+      captureStream.on('data', (chunk) => encryptedChunks.push(chunk));
 
-        await assert.rejects(
-          async () => storage.get(badKey),
-          /Invalid storage key format/i,
-          `Expected key "${badKey}" to be rejected on get`
-        );
+      await pipeline(
+        Readable.from([fakePlaintext]),
+        compressor,
+        cipher,
+        captureStream
+      );
 
-        await assert.rejects(
-          async () => storage.exists(badKey),
-          /Invalid storage key format/i,
-          `Expected key "${badKey}" to be rejected on exists`
-        );
+      const ciphertext = Buffer.concat(encryptedChunks);
+      assert.ok(ciphertext.length > 0, 'Encrypted ciphertext must not be empty');
+      assert.notStrictEqual(
+        ciphertext.toString('utf8'),
+        fakePlaintext,
+        'Ciphertext must differ from original plaintext'
+      );
+      assert.ok(Buffer.isBuffer(authTag), 'Authentication tag must be captured on end event');
+      assert.strictEqual(authTag.length, 16, 'AES-GCM authentication tag must be 16 bytes');
+    });
+  });
 
-        await assert.rejects(
-          async () => storage.delete(badKey),
-          /Invalid storage key format/i,
-          `Expected key "${badKey}" to be rejected on delete`
-        );
+  describe('uploadEncryptedStream', () => {
+    it('captures the authentication tag at the end of the stream and uploads to S3', async () => {
+      let capturedBucket = null;
+      let capturedKey = null;
+
+      s3Client.send = async (command) => {
+        if (command.input) {
+          capturedBucket = command.input.Bucket;
+          capturedKey = command.input.Key;
+          if (command.input.Body) {
+            for await (const _ of command.input.Body) {
+              // Drain stream to drive cipher completion
+            }
+          }
+        }
+        return { ETag: '"mock-s3-etag"' };
+      };
+
+      const cryptoPipeline = createEncryptionStream();
+      const rawFileStream = Readable.from(['Streaming direct file upload to S3 without disk buffering']);
+
+      const result = await uploadEncryptedStream(rawFileStream, cryptoPipeline);
+
+      assert.ok(result, 'uploadEncryptedStream should resolve with an object');
+      assert.ok(typeof result.objectKey === 'string', 'objectKey should be a string');
+      assert.match(
+        result.objectKey,
+        /^[0-9a-f]{32}$/,
+        'objectKey must be a 16-byte random hex string (32 hex characters)'
+      );
+
+      assert.ok(Buffer.isBuffer(result.authTag), 'authTag must be a Buffer');
+      assert.strictEqual(result.authTag.length, 16, 'authTag must be 16 bytes');
+      assert.deepStrictEqual(
+        result.authTag,
+        cryptoPipeline.cipher.getAuthTag(),
+        'Returned auth tag must match the cipher authentication tag'
+      );
+
+      assert.strictEqual(capturedBucket, env.AWS_S3_BUCKET_NAME);
+      assert.strictEqual(capturedKey, result.objectKey);
+    });
+
+    it('throws an error if the encryption pipeline fails to produce an authentication tag', async () => {
+      s3Client.send = async () => ({ ETag: '"mock-etag"' });
+
+      const fakeCipher = new PassThrough();
+      fakeCipher.getAuthTag = () => null;
+      const fakeCompressor = new PassThrough();
+      const fakePipeline = {
+        cipher: fakeCipher,
+        compressor: fakeCompressor,
+        key: crypto.randomBytes(32),
+        iv: crypto.randomBytes(12),
+      };
+
+      const rawFileStream = Readable.from(['Broken cipher pipeline']);
+
+      await assert.rejects(
+        async () => uploadEncryptedStream(rawFileStream, fakePipeline),
+        /Encryption pipeline failed: Auth tag was not generated/i
+      );
+    });
+  });
+
+  describe('downloadEncryptedStream', () => {
+    it('fetches the encrypted stream from AWS S3 using GetObjectCommand', async () => {
+      const mockEncryptedData = Buffer.from('mock-encrypted-s3-blob');
+      let dispatchedCommand = null;
+
+      s3Client.send = async (command) => {
+        dispatchedCommand = command;
+        return {
+          Body: Readable.from([mockEncryptedData]),
+        };
+      };
+
+      const testKey = 'abc123def456789012345678901234ef';
+      const stream = await downloadEncryptedStream(testKey);
+
+      assert.ok(stream, 'downloadEncryptedStream should return a stream');
+      assert.strictEqual(dispatchedCommand.input.Bucket, env.AWS_S3_BUCKET_NAME);
+      assert.strictEqual(dispatchedCommand.input.Key, testKey);
+
+      const downloadedChunks = [];
+      for await (const chunk of stream) {
+        downloadedChunks.push(chunk);
       }
+      assert.deepStrictEqual(Buffer.concat(downloadedChunks), mockEncryptedData);
+    });
+  });
+
+  describe('Decryption & Tamper-evidence (AES-256-GCM)', () => {
+    it('successfully round-trips compressed and encrypted stream data back to original plaintext', async () => {
+      const originalMessage = 'Strictly confidential security report for Cipher Vault 2026';
+      const encPipeline = createEncryptionStream();
+
+      let authTag = null;
+      encPipeline.cipher.on('end', () => {
+        authTag = encPipeline.cipher.getAuthTag();
+      });
+
+      const encryptedChunks = [];
+      const captureCiphertext = new PassThrough();
+      captureCiphertext.on('data', (chunk) => encryptedChunks.push(chunk));
+
+      await pipeline(
+        Readable.from([originalMessage]),
+        encPipeline.compressor,
+        encPipeline.cipher,
+        captureCiphertext
+      );
+
+      const ciphertext = Buffer.concat(encryptedChunks);
+      assert.ok(authTag, 'Auth tag must be captured');
+
+      const decPipeline = createDecryptionStream(encPipeline.key, encPipeline.iv, authTag);
+      const decryptedChunks = [];
+      const capturePlaintext = new PassThrough();
+      capturePlaintext.on('data', (chunk) => decryptedChunks.push(chunk));
+
+      await pipeline(
+        Readable.from([ciphertext]),
+        decPipeline.decipher,
+        decPipeline.decompressor,
+        capturePlaintext
+      );
+
+      const restoredMessage = Buffer.concat(decryptedChunks).toString('utf8');
+      assert.strictEqual(restoredMessage, originalMessage, 'Decrypted plaintext must match original message');
     });
 
-    it('survives re-instantiation (persistence across instances)', async () => {
-      const storage1 = new DiskStorage(testDir);
-      const key = generateStorageKey();
-      const payload = Buffer.from('persisted-ciphertext-data');
+    it('throws an authentication error if authTag is tampered with during decryption', async () => {
+      const originalMessage = 'Authenticated sensitive document payload';
+      const encPipeline = createEncryptionStream();
 
-      await storage1.put(key, payload);
+      let authTag = null;
+      encPipeline.cipher.on('end', () => {
+        authTag = encPipeline.cipher.getAuthTag();
+      });
 
-      // Re-instantiate pointing to the same directory
-      const storage2 = new DiskStorage(testDir);
-      assert.strictEqual(await storage2.exists(key), true);
+      const encryptedChunks = [];
+      const captureCiphertext = new PassThrough();
+      captureCiphertext.on('data', (chunk) => encryptedChunks.push(chunk));
 
-      const fetched = await storage2.get(key);
-      assert.deepStrictEqual(fetched, payload);
+      await pipeline(
+        Readable.from([originalMessage]),
+        encPipeline.compressor,
+        encPipeline.cipher,
+        captureCiphertext
+      );
 
-      // Clean up the key
-      await storage2.delete(key);
+      const ciphertext = Buffer.concat(encryptedChunks);
+
+      // Tamper with authentication tag (flip bits in the first byte)
+      const tamperedAuthTag = Buffer.from(authTag);
+      tamperedAuthTag[0] ^= 0xff;
+
+      const decPipeline = createDecryptionStream(encPipeline.key, encPipeline.iv, tamperedAuthTag);
+
+      await assert.rejects(
+        async () => {
+          await pipeline(
+            Readable.from([ciphertext]),
+            decPipeline.decipher,
+            decPipeline.decompressor
+          );
+        },
+        /Unsupported state or unable to authenticate data/i,
+        'Tampered authentication tag must cause decipher to throw an authentication failure'
+      );
     });
 
-    it('cleans up temporary test directory', async () => {
-      const storage = new DiskStorage(testDir);
-      await storage.clear();
-      try {
-        await fs.promises.rm(testDir, { recursive: true, force: true });
-      } catch {
-        // ignore
-      }
+    it('throws an authentication error if ciphertext is tampered with during decryption', async () => {
+      const originalMessage = 'Tamper-evident ciphertext stream integrity test';
+      const encPipeline = createEncryptionStream();
+
+      let authTag = null;
+      encPipeline.cipher.on('end', () => {
+        authTag = encPipeline.cipher.getAuthTag();
+      });
+
+      const encryptedChunks = [];
+      const captureCiphertext = new PassThrough();
+      captureCiphertext.on('data', (chunk) => encryptedChunks.push(chunk));
+
+      await pipeline(
+        Readable.from([originalMessage]),
+        encPipeline.compressor,
+        encPipeline.cipher,
+        captureCiphertext
+      );
+
+      const ciphertext = Buffer.concat(encryptedChunks);
+
+      // Tamper with ciphertext (flip bits in the middle byte)
+      const tamperedCiphertext = Buffer.from(ciphertext);
+      const midpoint = Math.floor(tamperedCiphertext.length / 2);
+      tamperedCiphertext[midpoint] ^= 0xff;
+
+      const decPipeline = createDecryptionStream(encPipeline.key, encPipeline.iv, authTag);
+
+      await assert.rejects(
+        async () => {
+          await pipeline(
+            Readable.from([tamperedCiphertext]),
+            decPipeline.decipher,
+            decPipeline.decompressor
+          );
+        },
+        /Unsupported state or unable to authenticate data/i,
+        'Tampered ciphertext must cause decipher to throw an authentication failure'
+      );
+    });
+
+    it('throws an authentication error if an incorrect decryption key is used', async () => {
+      const originalMessage = 'Key mismatch integrity test';
+      const encPipeline = createEncryptionStream();
+
+      let authTag = null;
+      encPipeline.cipher.on('end', () => {
+        authTag = encPipeline.cipher.getAuthTag();
+      });
+
+      const encryptedChunks = [];
+      const captureCiphertext = new PassThrough();
+      captureCiphertext.on('data', (chunk) => encryptedChunks.push(chunk));
+
+      await pipeline(
+        Readable.from([originalMessage]),
+        encPipeline.compressor,
+        encPipeline.cipher,
+        captureCiphertext
+      );
+
+      const ciphertext = Buffer.concat(encryptedChunks);
+      const wrongKey = crypto.randomBytes(32);
+
+      const decPipeline = createDecryptionStream(wrongKey, encPipeline.iv, authTag);
+
+      await assert.rejects(
+        async () => {
+          await pipeline(
+            Readable.from([ciphertext]),
+            decPipeline.decipher,
+            decPipeline.decompressor
+          );
+        },
+        /Unsupported state or unable to authenticate data/i,
+        'Decryption with incorrect key must fail authentication'
+      );
+    });
+
+    it('throws an authentication error if an incorrect IV is used', async () => {
+      const originalMessage = 'IV mismatch integrity test';
+      const encPipeline = createEncryptionStream();
+
+      let authTag = null;
+      encPipeline.cipher.on('end', () => {
+        authTag = encPipeline.cipher.getAuthTag();
+      });
+
+      const encryptedChunks = [];
+      const captureCiphertext = new PassThrough();
+      captureCiphertext.on('data', (chunk) => encryptedChunks.push(chunk));
+
+      await pipeline(
+        Readable.from([originalMessage]),
+        encPipeline.compressor,
+        encPipeline.cipher,
+        captureCiphertext
+      );
+
+      const ciphertext = Buffer.concat(encryptedChunks);
+      const wrongIv = crypto.randomBytes(12);
+
+      const decPipeline = createDecryptionStream(encPipeline.key, wrongIv, authTag);
+
+      await assert.rejects(
+        async () => {
+          await pipeline(
+            Readable.from([ciphertext]),
+            decPipeline.decipher,
+            decPipeline.decompressor
+          );
+        },
+        /Unsupported state or unable to authenticate data/i,
+        'Decryption with incorrect IV must fail authentication'
+      );
     });
   });
 });

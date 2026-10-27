@@ -213,6 +213,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         """Incoming chat question payload."""
 
         question: str = Field(..., min_length=1, max_length=cfg.max_question_chars)
+        mode: str = Field(default="auto")
 
     @app.get("/v1/llm/status")
     async def llm_status(request: Request) -> dict[str, Any]:
@@ -235,7 +236,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         chat_service: ChatService = request.app.state.chat_service
 
         async def event_generator() -> AsyncGenerator[str, None]:
-            async for frame in chat_service.answer_stream(payload.question, session):
+            async for frame in chat_service.answer_stream(payload.question, session, mode=payload.mode):
                 yield frame
 
         return StreamingResponse(
@@ -254,8 +255,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         request: Request,
         session: Session = Depends(get_authorized_session),
     ) -> Response:
-        """Wipe the conversation history for this session without deleting the session."""
+        """Wipe the conversation history and summary cache for this session without deleting the session."""
         session.chat_history.clear()
+        session.summary_cache.clear()
+        request.app.state.vector_store.clear_summary_cache(sid)
         return Response(status_code=204)
 
     return app

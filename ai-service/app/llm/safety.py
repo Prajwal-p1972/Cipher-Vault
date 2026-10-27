@@ -67,12 +67,26 @@ def is_question_valid(question: str, cfg: Settings | None = None) -> tuple[bool,
     return True, ""
 
 
-def sanitize_answer(text: str) -> str:
+def sanitize_answer(text: str, allowed_pages: set[int] | list[int] | None = None) -> str:
     """Remove control characters, fake citation tags, and NFC-normalize an LLM answer.
 
-    Does not truncate or alter semantic content; only strips characters that could
-    cause UI injection, terminal escapes, or hallucinated citation markers.
+    If allowed_pages is specified, [p.N] citations matching allowed_pages are kept,
+    while citations for pages not in allowed_pages are stripped.
+    If allowed_pages is None, all [p.N] citations are stripped.
     """
     cleaned = _CONTROL_CHARS_PATTERN.sub("", text)
-    cleaned = _FAKE_CITATION_PATTERN.sub("", cleaned)
+    if allowed_pages is not None:
+        allowed_set = {int(p) for p in allowed_pages}
+
+        def _filter_citation(m: re.Match[str]) -> str:
+            citation_str = m.group(0)
+            p_match = re.search(r"\d+", citation_str)
+            if p_match and int(p_match.group(0)) in allowed_set:
+                return citation_str
+            return ""
+
+        cleaned = _FAKE_CITATION_PATTERN.sub(_filter_citation, cleaned)
+    else:
+        cleaned = _FAKE_CITATION_PATTERN.sub("", cleaned)
+
     return _normalize(cleaned)

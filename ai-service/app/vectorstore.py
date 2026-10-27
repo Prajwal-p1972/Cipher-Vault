@@ -7,6 +7,7 @@ import chromadb
 from chromadb.api import ClientAPI
 from chromadb.api.models.Collection import Collection
 from chromadb.config import Settings
+import numpy as np
 from app.schemas import Chunk
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,10 @@ class SessionStore:
             is_persistent=False,
         )
         self._client: ClientAPI = chromadb.EphemeralClient(settings=self._settings)
+        # In-memory document storage: session_id -> doc_id -> {"chunks": list[Chunk], "embeddings": np.ndarray}
+        self._doc_data: dict[str, dict[str, dict[str, Any]]] = {}
+        # In-memory summary cache: session_id -> dict[str, str] {mode: text}
+        self._summary_cache: dict[str, dict[str, str]] = {}
 
     @staticmethod
     def _collection_name(session_id: str) -> str:
@@ -69,6 +74,26 @@ class SessionStore:
             documents=documents,
             metadatas=metadatas,
         )
+
+        # In-memory ordered chunk list and normalized embedding matrix
+        if session_id not in self._doc_data:
+            self._doc_data[session_id] = {}
+
+        if embeddings and len(embeddings) > 0:
+            arr = np.array(embeddings, dtype=np.float32)
+            norms = np.linalg.norm(arr, axis=1, keepdims=True)
+            norms[norms == 0] = 1.0
+            norm_embeddings = arr / norms
+        else:
+            norm_embeddings = np.empty((0, 0), dtype=np.float32)
+
+        self._doc_data[session_id][doc_id] = {
+            "chunks": list(chunks),
+            "embeddings": norm_embeddings,
+        }
+        # Invalidate summary cache when a new document is added
+        self.clear_summary_cache(session_id)
+
         logger.debug(
             "Added %d chunks for doc_id=%s into session collection",
             len(chunks),
@@ -80,9 +105,10 @@ class SessionStore:
         session_id: str,
         query_embedding: list[float],
         k: int = 5,
+        max_k: int = 10,
     ) -> list[dict[str, Any]]:
-        """Query top-k most similar chunks using cosine similarity capped at 10."""
-        capped_k = min(max(1, int(k)), 10)
+        """Query top-k most similar chunks using cosine similarity capped at max_k (default 10)."""
+        capped_k = min(max(1, int(k)), max_k)
         collection = self.create(session_id)
         total_items = collection.count()
 
@@ -114,13 +140,63 @@ class SessionStore:
                         "source": str(meta.get("source", "")),
                         "score": round(cosine_sim, 4),
                         "docId": str(meta.get("doc_id", "")),
+                        "chunk_index": int(meta.get("chunk_index", 0)),
+                        "section": str(meta.get("section", "")),
+                        "kind": str(meta.get("kind", "text")),
                     }
                 )
 
         return results
 
+    def get_document_data(
+        self,
+        session_id: str,
+        doc_id: Optional[str] = None,
+    ) -> tuple[list[Chunk], np.ndarray]:
+        """Retrieve ordered chunk list and normalized embedding matrix for document(s)."""
+        session_docs = self._doc_data.get(session_id, {})
+        if not session_docs:
+            return [], np.empty((0, 0), dtype=np.float32)
+
+        if doc_id is not None:
+            doc_record = session_docs.get(doc_id)
+            if not doc_record:
+                return [], np.empty((0, 0), dtype=np.float32)
+            return list(doc_record["chunks"]), doc_record["embeddings"]
+
+        # Concatenate all docs in session in insertion order
+        all_chunks: list[Chunk] = []
+        all_embs: list[np.ndarray] = []
+        for d in session_docs.values():
+            all_chunks.extend(d["chunks"])
+            if d["embeddings"].size > 0:
+                all_embs.append(d["embeddings"])
+
+        if all_embs:
+            merged_embs = np.vstack(all_embs)
+        else:
+            merged_embs = np.empty((0, 0), dtype=np.float32)
+
+        return all_chunks, merged_embs
+
+    def get_summary_cache(self, session_id: str, mode: str) -> Optional[str]:
+        """Retrieve cached whole-document summary for the session and mode."""
+        return self._summary_cache.get(session_id, {}).get(mode)
+
+    def set_summary_cache(self, session_id: str, mode: str, text: str) -> None:
+        """Store generated whole-document summary in ephemeral session memory."""
+        if session_id not in self._summary_cache:
+            self._summary_cache[session_id] = {}
+        self._summary_cache[session_id][mode] = text
+
+    def clear_summary_cache(self, session_id: str) -> None:
+        """Clear whole-document summary cache for session."""
+        self._summary_cache.pop(session_id, None)
+
     def delete(self, session_id: str) -> None:
-        """Delete session collection from in-memory ChromaDB client."""
+        """Delete session collection and memory stores from in-memory ChromaDB client."""
+        self._doc_data.pop(session_id, None)
+        self._summary_cache.pop(session_id, None)
         name = self._collection_name(session_id)
         try:
             self._client.delete_collection(name=name)
@@ -140,7 +216,9 @@ class SessionStore:
         return len(self._client.list_collections())
 
     def reset(self) -> None:
-        """Reset the entire in-memory vector store, purging all collections."""
+        """Reset the entire in-memory vector store, purging all collections and caches."""
+        self._doc_data.clear()
+        self._summary_cache.clear()
         try:
             self._client.reset()
         except Exception:

@@ -40,8 +40,8 @@ class Settings(BaseSettings):
     max_image_pixels: int = 40_000_000
 
     # Text chunking
-    chunk_chars: int = 800
-    chunk_overlap: int = 100
+    chunk_chars: int = 1000
+    chunk_overlap: int = 150
 
     # Session storage
     session_ttl_seconds: int = 1800
@@ -49,21 +49,37 @@ class Settings(BaseSettings):
     max_docs_per_session: int = 5
 
     # Models
-    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    # Default: BAAI/bge-small-en-v1.5. Higher accuracy option: BAAI/bge-base-en-v1.5
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
+    # Default: BAAI/bge-reranker-base. Lighter option: cross-encoder/ms-marco-MiniLM-L-6-v2
+    rerank_model: str = "BAAI/bge-reranker-base"
+    rerank_score_threshold: float = -4.0
+    retrieval_final_k: int = 6
+
+    # Hybrid Retrieval & Optimization Flags
+    enable_hybrid_retrieval: bool = True
+    enable_reranking: bool = True
+    enable_query_rewrite: bool = True
 
     # LLM / Ollama
+    # Configurable model name; options include llama3, llama3.1:8b, qwen2.5:7b-instruct
     ollama_url: str = "http://127.0.0.1:11434"
     llm_model: str = "llama3"
-    llm_num_ctx: int = 4096
-    llm_temperature: float = 0.2
+    llm_num_ctx: int = 8192
+    llm_temperature: float = 0.1
     llm_max_answer_tokens: int = 700
     llm_timeout_seconds: int = 180
-    retrieval_k: int = 5
+    retrieval_k: int = 20
     min_similarity: float = 0.25
     max_question_chars: int = 1000
     max_history_turns: int = 6
-    max_context_chars: int = 6000
+    max_context_chars: int = 12000
     max_chats_per_minute: int = 12
+
+    # Whole-document summarization settings
+    summary_max_chars: int = 8000
+    summary_group_chars: int = 3500
+    summary_group_tokens: int = 120
 
 
 def _assert_ollama_loopback(url: str) -> None:

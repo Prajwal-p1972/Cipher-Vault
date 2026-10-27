@@ -25,7 +25,7 @@ def download_all_models() -> None:
     print("=== Cipher Vault AI Service: One-Time Model Download ===")
 
     # 1. EasyOCR English Models
-    print("\n[1/2] Downloading EasyOCR models (English detection + recognition)...")
+    print("\n[1/3] Downloading EasyOCR models (English detection + recognition)...")
     try:
         import easyocr
         easyocr_cache = Path.home() / ".EasyOCR" / "model"
@@ -35,19 +35,31 @@ def download_all_models() -> None:
         print(f"✗ Failed to download EasyOCR models: {exc}", file=sys.stderr)
         raise
 
-    # 2. SentenceTransformer Embedding Model
-    model_name = "sentence-transformers/all-MiniLM-L6-v2"
-    print(f"\n[2/2] Downloading SentenceTransformer weights ({model_name})...")
+    # 2. BGE Embedding Model
+    embed_model_name = "BAAI/bge-small-en-v1.5"
+    print(f"\n[2/3] Downloading SentenceTransformer embedding weights ({embed_model_name})...")
     try:
         from sentence_transformers import SentenceTransformer
         hf_cache = os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))
-        model = SentenceTransformer(model_name)
-        # Verify model inference
-        test_vector = model.encode("Cipher Vault secure offline verification.")
+        model = SentenceTransformer(embed_model_name)
+        test_vector = model.encode("Represent this sentence for searching relevant passages: Cipher Vault verification.")
         print(f"✓ Embedding model verified ({len(test_vector)} dimensions).")
         print(f"✓ Model weights stored under: {hf_cache}")
     except Exception as exc:
         print(f"✗ Failed to download embedding model: {exc}", file=sys.stderr)
+        raise
+
+    # 3. CrossEncoder Reranker Model
+    rerank_model_name = "BAAI/bge-reranker-base"
+    print(f"\n[3/3] Downloading CrossEncoder reranker weights ({rerank_model_name})...")
+    try:
+        from sentence_transformers import CrossEncoder
+        reranker = CrossEncoder(rerank_model_name)
+        score = reranker.predict([["test query", "test passage"]])
+        print(f"✓ Reranker model verified (test score: {score}).")
+        print(f"✓ Reranker weights stored under: {hf_cache}")
+    except Exception as exc:
+        print(f"✗ Failed to download reranker model: {exc}", file=sys.stderr)
         raise
 
     print("\n=== Model Pre-caching Complete ===")

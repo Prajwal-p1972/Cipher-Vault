@@ -2,11 +2,13 @@ import http from 'node:http';
 import app from './app.js';
 import { env } from './config/env.js';
 import { connectDB, disconnectDB } from './config/db.js';
-import { initSocketServer, closeSocketServer } from './realtime/socketServer.js';
+import { initSocket, closeSocket } from './config/socket.js';
 
 // HTTP server instance allows socket.io attachment in Phase 3
 const server = http.createServer(app);
-initSocketServer(server);
+
+// Initialize WebSockets
+initSocket(server);
 
 async function start() {
   try {
@@ -29,7 +31,7 @@ async function gracefulShutdown(signal) {
 
   server.close(async () => {
     try {
-      await closeSocketServer();
+      await closeSocket();
       await disconnectDB();
       console.log('[Cipher Vault] Graceful shutdown complete. Exiting.');
       process.exit(0);

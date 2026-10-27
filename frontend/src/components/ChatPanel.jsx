@@ -97,6 +97,48 @@ export function ChatPanel({ session }) {
         </button>
       </div>
 
+      {/* Quick Summary Action Buttons */}
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          onClick={() => ask('Summarize document', 'summary')}
+          disabled={isStreaming || !session}
+          aria-label="Summarize document"
+          style={{
+            background: '#1e293b',
+            border: '1px solid #3b82f6',
+            borderRadius: '4px',
+            color: '#60a5fa',
+            fontSize: '0.75rem',
+            fontWeight: 500,
+            padding: '0.3rem 0.65rem',
+            cursor: isStreaming || !session ? 'not-allowed' : 'pointer',
+            opacity: isStreaming || !session ? 0.5 : 1
+          }}
+        >
+          Summarize document
+        </button>
+        <button
+          type="button"
+          onClick={() => ask('Detailed summary of document', 'detailed')}
+          disabled={isStreaming || !session}
+          aria-label="Detailed summary"
+          style={{
+            background: '#1e293b',
+            border: '1px solid #8b5cf6',
+            borderRadius: '4px',
+            color: '#c084fc',
+            fontSize: '0.75rem',
+            fontWeight: 500,
+            padding: '0.3rem 0.65rem',
+            cursor: isStreaming || !session ? 'not-allowed' : 'pointer',
+            opacity: isStreaming || !session ? 0.5 : 1
+          }}
+        >
+          Detailed summary
+        </button>
+      </div>
+
       {/* Message List */}
       <div
         style={{
@@ -140,6 +182,21 @@ export function ChatPanel({ session }) {
               >
                 {m.role === 'user' ? 'You' : 'Local AI'}
               </div>
+
+              {/* Multi-step summarization progress indicator */}
+              {m.role === 'assistant' && m.streaming && m.progress && (
+                <div
+                  data-testid="summary-progress"
+                  style={{
+                    fontSize: '0.75rem',
+                    color: '#38bdf8',
+                    fontStyle: 'italic',
+                    marginBottom: '0.15rem'
+                  }}
+                >
+                  Summarizing... step {m.progress.step} of {m.progress.of}
+                </div>
+              )}
 
               {/* Strict Plain-Text Render Container */}
               <div

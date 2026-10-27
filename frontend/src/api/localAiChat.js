@@ -141,14 +141,18 @@ export function parseSseChunk(rawChunk, state) {
  * @param {{
  *   signal?: AbortSignal,
  *   onSources?: (sources: Array<{ page: number, source: string, score: number }>) => void,
+ *   onProgress?: (progress: { step: number, of: number }) => void,
  *   onToken?: (text: string) => void,
  *   onDone?: (doneData: object) => void,
- *   onError?: (error: Error) => void
+ *   onError?: (error: Error) => void,
+ *   mode?: 'auto' | 'summary' | 'detailed'
  * }} callbacks
+ * @param {'auto' | 'summary' | 'detailed'} [mode]
  * @returns {Promise<void>}
  */
-export async function streamChat(session, question, callbacks = {}) {
-  const { signal, onSources, onToken, onDone, onError } = callbacks;
+export async function streamChat(session, question, callbacks = {}, mode) {
+  const { signal, onSources, onProgress, onToken, onDone, onError, mode: cbMode } = callbacks;
+  const effectiveMode = cbMode || mode;
 
   if (!session || !session.sessionId || !session.token) {
     const err = new LocalAiChatError(401, 'Session expired, re-analyze the document');
@@ -162,6 +166,11 @@ export async function streamChat(session, question, callbacks = {}) {
     throw err;
   }
 
+  const reqBody = { question: question.trim() };
+  if (effectiveMode) {
+    reqBody.mode = effectiveMode;
+  }
+
   let res;
   try {
     res = await fetch(`${AI_URL}/v1/sessions/${session.sessionId}/chat`, {
@@ -170,7 +179,7 @@ export async function streamChat(session, question, callbacks = {}) {
         Authorization: `Bearer ${session.token}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ question: question.trim() }),
+      body: JSON.stringify(reqBody),
       signal
     });
   } catch (err) {
@@ -211,6 +220,8 @@ export async function streamChat(session, question, callbacks = {}) {
     for (const ev of events) {
       if (ev.event === 'sources') {
         onSources?.(ev.data?.sources || ev.data);
+      } else if (ev.event === 'progress') {
+        onProgress?.(ev.data);
       } else if (ev.event === 'token') {
         const tokenText = ev.data?.text ?? '';
         if (totalChars + tokenText.length > MAX_ANSWER_CHARS) {
@@ -249,6 +260,8 @@ export async function streamChat(session, question, callbacks = {}) {
         for (const ev of events) {
           if (ev.event === 'sources') {
             onSources?.(ev.data?.sources || ev.data);
+          } else if (ev.event === 'progress') {
+            onProgress?.(ev.data);
           } else if (ev.event === 'token') {
             if (capped) continue;
             const tokenText = ev.data?.text ?? '';

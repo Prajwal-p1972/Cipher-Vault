@@ -23,6 +23,7 @@ export function requireAuth(scope = SCOPES.ACCESS) {
 
     const payload = verifyToken(token, scope);
     req.auth = { userId: payload.sub };
+    req.user = req.user || { _id: payload.sub };
     next();
   };
 }
