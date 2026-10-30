@@ -12,7 +12,7 @@ import {
   ArcElement,
 } from 'chart.js';
 import { Doughnut, Bar } from 'react-chartjs-2';
-import api from '../api/axios.js';
+import { request } from '../api/http.js';
 
 ChartJS.register(
   CategoryScale,
@@ -34,7 +34,7 @@ export function AuditDashboard() {
     let isMounted = true;
     const fetchLogs = async () => {
       try {
-        const { data } = await api.get('/audit/me');
+        const data = await request('/api/audit/me');
         if (isMounted) {
           setLogs(data?.logs || []);
         }

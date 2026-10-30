@@ -113,6 +113,102 @@ describe('HTTP Client & Single-Flight Refresh Tests', () => {
     expect(getAccessToken()).toBe('fresh_rotated_access_token_456');
   });
 
+  it('proves five concurrent 401 responses including from AuditDashboard (/api/audit/me) cause exactly ONE /refresh request', async () => {
+    setAccessToken('stale_dashboard_token');
+
+    let refreshCallCount = 0;
+    const endpoints = [
+      '/api/audit/me', // AuditDashboard endpoint
+      '/api/documents/sent',
+      '/api/documents/received',
+      '/api/keys/active',
+      '/api/analytics/overview'
+    ];
+
+    const callCounts = {};
+    for (const ep of endpoints) {
+      callCounts[ep] = 0;
+    }
+
+    globalThis.fetch = vi.fn(async (url, options = {}) => {
+      const urlStr = String(url);
+
+      if (urlStr === '/api/auth/refresh') {
+        refreshCallCount++;
+        // Concurrency window
+        await new Promise((res) => setTimeout(res, 25));
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            accessToken: 'fresh_single_flight_token',
+            user: { id: 'u_vault_1' }
+          })
+        };
+      }
+
+      if (endpoints.includes(urlStr)) {
+        callCounts[urlStr] = (callCounts[urlStr] || 0) + 1;
+        const authHeader = options.headers?.['Authorization'] || options.headers?.Authorization;
+
+        if (authHeader === 'Bearer stale_dashboard_token') {
+          return {
+            ok: false,
+            status: 401,
+            json: async () => ({ error: 'Access token expired' })
+          };
+        }
+
+        if (authHeader === 'Bearer fresh_single_flight_token') {
+          if (urlStr === '/api/audit/me') {
+            return {
+              ok: true,
+              status: 200,
+              json: async () => ({ logs: [{ id: 'log_1', action: 'DOC_SEALED', outcome: 'success' }] })
+            };
+          }
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ success: true, endpoint: urlStr })
+          };
+        }
+
+        return {
+          ok: false,
+          status: 403,
+          json: async () => ({ error: 'Forbidden' })
+        };
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        json: async () => ({ error: 'Not found' })
+      };
+    });
+
+    // Launch all 5 requests concurrently including AuditDashboard
+    const results = await Promise.all(endpoints.map((ep) => request(ep)));
+
+    // Verify AuditDashboard got its logs
+    expect(results[0]).toEqual({ logs: [{ id: 'log_1', action: 'DOC_SEALED', outcome: 'success' }] });
+
+    // Verify all 5 resolved successfully
+    expect(results).toHaveLength(5);
+
+    // Verify single-flight invariant: exactly ONE /refresh call was made
+    expect(refreshCallCount).toBe(1);
+
+    // Verify each endpoint retried exactly once after refresh
+    for (const ep of endpoints) {
+      expect(callCounts[ep]).toBe(2);
+    }
+
+    // Verify in-memory access token was updated
+    expect(getAccessToken()).toBe('fresh_single_flight_token');
+  });
+
   it('dispatches auth:logout on window and clears in-memory token when refresh fails', async () => {
     setAccessToken('stale_token_abc');
 

@@ -14,15 +14,13 @@ export class ApiError extends Error {
   }
 }
 
-import { setAccessToken as setAxiosToken, getAccessToken as getAxiosToken } from './axios.js';
-
 /**
  * Returns active in-memory access token.
  *
  * @returns {string|null}
  */
 export function getAccessToken() {
-  return accessToken || (typeof getAxiosToken === 'function' ? getAxiosToken() : null);
+  return accessToken;
 }
 
 /**
@@ -32,11 +30,6 @@ export function getAccessToken() {
  */
 export function setAccessToken(token) {
   accessToken = token;
-  if (typeof setAxiosToken === 'function' && getAxiosToken() !== token) {
-    try {
-      setAxiosToken(token);
-    } catch (_) {}
-  }
 }
 
 /**
@@ -44,11 +37,6 @@ export function setAccessToken(token) {
  */
 export function clearAccessToken() {
   accessToken = null;
-  if (typeof setAxiosToken === 'function') {
-    try {
-      setAxiosToken(null);
-    } catch (_) {}
-  }
 }
 
 /**
