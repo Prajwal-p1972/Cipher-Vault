@@ -43,7 +43,8 @@ const uploadFieldsSchema = z
       .preprocess(
         (val) => (val === '' || val === undefined ? undefined : Number(val)),
         z.number().min(1).max(100000).optional()
-      )
+      ),
+    delivery: z.enum(['wrapped', 'qr']).optional().default('wrapped')
   })
   .superRefine((data, ctx) => {
     const geoFields = [data.geoLat, data.geoLng, data.geoRadiusMeters];
@@ -78,7 +79,7 @@ export async function createDocument(req, res) {
     throw AppError.badRequest('Validation failed', details);
   }
 
-  const { receiverEmail, expiresAt, oneTimeUse, geoLat, geoLng, geoRadiusMeters } = parsed.data;
+  const { receiverEmail, expiresAt, oneTimeUse, geoLat, geoLng, geoRadiusMeters, delivery } = parsed.data;
 
   const policy = {
     expiresAt: expiresAt ? new Date(expiresAt) : null,
@@ -107,7 +108,8 @@ export async function createDocument(req, res) {
         originalName: req.file.originalname,
         declaredMime: req.file.mimetype
       },
-      policy
+      policy,
+      delivery
     },
     ctx
   );
@@ -121,6 +123,58 @@ export async function createDocument(req, res) {
   });
 
   res.status(201).json(result);
+}
+
+/**
+ * Retrieves the encrypted key envelope for a wrapped document.
+ * Restricts access to the intended receiver only.
+ *
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ */
+export async function getKeyEnvelope(req, res) {
+  res.set('Cache-Control', 'no-store');
+
+  const doc = await Document.findById(req.params.id).lean().exec();
+
+  const receiverStr = doc?.receiver
+    ? (doc.receiver._id ? doc.receiver._id.toString() : doc.receiver.toString())
+    : null;
+
+  if (!doc || receiverStr !== String(req.auth.userId)) {
+    throw AppError.notFound('Document not found');
+  }
+
+  if (doc.delivery === 'qr' || !doc.keyEnvelope) {
+    throw AppError.notFound('Document not found');
+  }
+
+  if (doc.status === 'consumed' || doc.status === 'revoked') {
+    const err = new AppError('Document is no longer available', 410);
+    err.code = 'consumed';
+    throw err;
+  }
+
+  if (doc.status === 'expired') {
+    const err = new AppError('Document has expired', 410);
+    err.code = 'expired';
+    throw err;
+  }
+
+  if (doc.policy?.expiresAt) {
+    const expiresTime = new Date(doc.policy.expiresAt).getTime();
+    if (!Number.isNaN(expiresTime) && expiresTime <= Date.now()) {
+      await Document.findOneAndUpdate(
+        { _id: doc._id, status: 'sealed' },
+        { $set: { status: 'expired' } }
+      ).exec();
+      const err = new AppError('Document has expired', 410);
+      err.code = 'expired';
+      throw err;
+    }
+  }
+
+  res.status(200).json({ envelope: doc.keyEnvelope });
 }
 
 /**

@@ -26,7 +26,9 @@ export const AUDIT_ACTIONS = [
   'DOC_ACCESS_GRANTED',
   'DOC_ACCESS_DENIED',
   'DOC_DECRYPTED',
-  'DOC_REVOKED'
+  'DOC_REVOKED',
+  'KEY_REGISTERED',
+  'KEY_ROTATED'
 ];
 
 const auditLogSchema = new mongoose.Schema(

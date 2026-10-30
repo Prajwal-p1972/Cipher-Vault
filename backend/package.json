@@ -12,7 +12,9 @@
     "test:e2e:p2": "node --test test/e2e/phase2.e2e.js",
     "test:e2e:p3": "node --test test/e2e/phase3.e2e.js",
     "test:e2e:p4": "node --test test/e2e/phase4.e2e.js",
-    "test:e2e:p6": "node --test test/e2e/phase6.e2e.js"
+    "test:e2e:p6": "node --test test/e2e/phase6.e2e.js",
+    "test:e2e:p7": "node --test test/e2e/phase7.e2e.js",
+    "test:e2e:disk": "node --test test/e2e/diskStorage.e2e.js"
   },
   "keywords": [
     "security",

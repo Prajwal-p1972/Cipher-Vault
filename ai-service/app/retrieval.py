@@ -218,7 +218,10 @@ async def rerank_candidates(
             scored_candidates.append((val, updated))
 
     scored_candidates.sort(key=lambda x: x[0], reverse=True)
-    return [c for _, c in scored_candidates]
+    if scored_candidates:
+        return [c for _, c in scored_candidates]
+    # Fallback to candidates without threshold filtering if all fell below threshold
+    return eval_candidates[:cfg.retrieval_final_k]
 
 
 def expand_neighbours(
@@ -274,6 +277,9 @@ async def hybrid_retrieve(
     cfg: Settings,
 ) -> list[dict[str, Any]]:
     """Execute end-to-end hybrid retrieval: Dense + BM25 -> RRF -> Rerank -> Neighbour Expansion."""
+    all_session_chunks = bm25_store.get_session_chunks(session_id)
+    total_session_chars = sum(len(c.get("text", "")) for c in all_session_chunks) if all_session_chunks else 0
+
     # 1. Dense retrieval (top-20)
     query_vector = await asyncio.to_thread(embed_query, query)
     dense_candidates = vector_store.query(
@@ -305,19 +311,34 @@ async def hybrid_retrieve(
         top_n=20,
     )
 
-    if not rrf_candidates:
-        return []
-
     # 4. Reranking (CrossEncoder)
-    if cfg.enable_reranking:
+    if cfg.enable_reranking and rrf_candidates:
         reranked = await rerank_candidates(query, rrf_candidates, cfg)
     else:
-        reranked = rrf_candidates
+        reranked = rrf_candidates or dense_candidates
+
+    # If the whole session text fits within the max context budget (e.g. 1-4 page documents),
+    # supply all session chunks with the top ranked candidates first,
+    # ensuring the model has 100% of the document content!
+    if all_session_chunks and total_session_chars <= cfg.max_context_chars:
+        seen_keys: set[tuple[str, int]] = set()
+        full_results: list[dict[str, Any]] = []
+        for hit in (reranked or rrf_candidates or dense_candidates):
+            key = (str(hit.get("docId", "")), int(hit.get("chunk_index", 0)))
+            if key not in seen_keys:
+                seen_keys.add(key)
+                full_results.append(hit)
+        for c in all_session_chunks:
+            key = (str(c.get("docId", "")), int(c.get("chunk_index", 0)))
+            if key not in seen_keys:
+                seen_keys.add(key)
+                full_results.append(c)
+        return full_results
 
     if not reranked:
-        return []
+        return dense_candidates[:cfg.retrieval_final_k] if dense_candidates else []
 
-    # 5. Neighbour expansion on top 2 hits + deduplication -> final_k
+    # 5. Neighbour expansion on top hits + deduplication -> final_k
     final_results = expand_neighbours(
         top_hits=reranked,
         session_id=session_id,

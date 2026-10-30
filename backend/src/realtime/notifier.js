@@ -63,6 +63,7 @@ export async function notifyDocumentSealed(
       originalName: document.originalName,
       mimeType: document.mimeType,
       sizeBytes: document.sizeBytes,
+      delivery: document.delivery || 'qr',
       senderName: resolvedSenderName || 'Sender',
       createdAt: document.createdAt,
       expiresAt: document.policy?.expiresAt ?? null,

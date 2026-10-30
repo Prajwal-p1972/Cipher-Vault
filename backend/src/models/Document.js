@@ -121,6 +121,26 @@ const documentSchema = new mongoose.Schema(
     consumedAt: {
       type: Date,
       default: null
+    },
+    delivery: {
+      type: String,
+      enum: ['wrapped', 'qr'],
+      default: 'qr'
+    },
+    keyEnvelope: {
+      type: new mongoose.Schema(
+        {
+          v: { type: Number, required: true },
+          alg: { type: String, required: true },
+          recipientKeyId: { type: String, required: true },
+          epk: { type: String, required: true },
+          salt: { type: String, required: true },
+          iv: { type: String, required: true },
+          ct: { type: String, required: true }
+        },
+        { _id: false }
+      ),
+      default: null
     }
   },
   {

@@ -149,7 +149,8 @@ a:focus-visible, button:focus-visible, input:focus-visible {
   font-size: 0.875rem;
 }
 
-.alert-danger {
+.alert-danger,
+.alert-error {
   background-color: var(--danger-bg);
   border: 1px solid var(--danger-border);
   color: var(--danger);

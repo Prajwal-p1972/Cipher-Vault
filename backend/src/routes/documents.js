@@ -11,7 +11,8 @@ import {
   listSent,
   listReceived,
   getMeta,
-  openDocument
+  openDocument,
+  getKeyEnvelope
 } from '../controllers/documentController.js';
 
 const router = Router();
@@ -62,6 +63,20 @@ export const unlockLimiter = rateLimit({
   message: { error: 'Too many unlock attempts, please try again later' }
 });
 
+/**
+ * Rate limiter for key envelope retrieval: 30 requests per 15 min per user.
+ */
+export const keyEnvelopeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    return req.auth?.userId ? `user_${req.auth.userId}` : `ip_${req.ip}`;
+  },
+  message: { error: 'Too many envelope requests, please try again later' }
+});
+
 // Document endpoints
 router.post(
   '/',
@@ -77,6 +92,14 @@ router.post(
   validateObjectId,
   unlockLimiter,
   openDocument
+);
+
+router.get(
+  '/:id/key-envelope',
+  requireAuth(SCOPES.ACCESS),
+  validateObjectId,
+  keyEnvelopeLimiter,
+  getKeyEnvelope
 );
 
 router.get('/sent', requireAuth(SCOPES.ACCESS), listSent);

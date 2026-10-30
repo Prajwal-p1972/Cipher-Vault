@@ -115,6 +115,7 @@ async function mfaLogin(baseUrl, email, password, mfaSecret) {
 async function uploadDocument(baseUrl, token, receiverEmail) {
   const form = new FormData();
   form.append('receiverEmail', receiverEmail);
+  form.append('delivery', 'qr');
   form.append('oneTimeUse', 'false');
   const blob = new Blob([Buffer.from('%PDF-1.7 test document payload', 'utf8')], {
     type: 'application/pdf'

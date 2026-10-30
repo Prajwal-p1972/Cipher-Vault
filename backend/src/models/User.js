@@ -63,6 +63,20 @@ const userSchema = new mongoose.Schema(
     lastLoginAt: {
       type: Date,
       default: null
+    },
+    vaultKey: {
+      publicKey: {
+        type: String,
+        default: null
+      },
+      keyId: {
+        type: String,
+        default: null
+      },
+      registeredAt: {
+        type: Date,
+        default: null
+      }
     }
   },
   {

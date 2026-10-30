@@ -116,6 +116,7 @@ describe('Phase 2 End-to-End Test Suite: Cryptographic Engine, Upload & Storage'
   test('2. Upload a valid multipart PDF as sender -> 201 with documentKey and no secrets leak', async () => {
     const form = new FormData();
     form.append('receiverEmail', receiver.email);
+    form.append('delivery', 'qr');
     form.append('oneTimeUse', 'true');
     const pdfBlob = new Blob([Buffer.from(samplePdfContent, 'utf8')], {
       type: 'application/pdf'

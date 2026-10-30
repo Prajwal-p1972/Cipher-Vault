@@ -7,6 +7,7 @@ import { UploadForm } from '../components/UploadForm.jsx';
 import { KeyRevealModal } from '../components/KeyRevealModal.jsx';
 import { UnlockModal } from '../components/UnlockModal.jsx';
 import { DocumentViewer } from '../components/DocumentViewer.jsx';
+import { AuditDashboard } from '../components/AuditDashboard.jsx';
 
 /**
  * Main application dashboard featuring Received / Sent / New Upload views,
@@ -325,6 +326,9 @@ export function Dashboard() {
             )}
           </div>
         )}
+
+        {/* Security & Audit Analytics Dashboard */}
+        <AuditDashboard />
       </div>
 
       {/* Secret Key Modal shown once after upload */}

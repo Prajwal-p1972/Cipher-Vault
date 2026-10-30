@@ -86,6 +86,7 @@ describe('Phase 4 End-to-End Test Suite: Context-Gated Opening of Sealed Documen
   async function uploadDocument(options = {}) {
     const form = new FormData();
     form.append('receiverEmail', receiver.email);
+    form.append('delivery', 'qr');
     form.append('oneTimeUse', options.oneTimeUse ? 'true' : 'false');
     if (options.expiresAt) {
       form.append('expiresAt', options.expiresAt);

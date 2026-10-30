@@ -117,6 +117,7 @@ describe('Disk Storage Driver E2E Persistence & Ciphertext Verification', () => 
     // 1. Upload/seal document with recipient = receiver.email
     const form = new FormData();
     form.append('receiverEmail', receiver.email);
+    form.append('delivery', 'qr');
     form.append('oneTimeUse', 'false');
 
     const blob = new Blob([Buffer.from(originalPdfPayload, 'utf8')], {

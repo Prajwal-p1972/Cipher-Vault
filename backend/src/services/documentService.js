@@ -18,6 +18,7 @@ import {
   decompress as defaultDecompress
 } from './crypto/compression.js';
 import { validateUpload as defaultValidateUpload } from './fileValidation.js';
+import { wrapDocumentKey as defaultWrapDocumentKey } from './crypto/keyWrap.js';
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -164,6 +165,7 @@ export function toPublicDoc(doc, forUserId = null) {
     originalName: d.originalName,
     mimeType: d.mimeType,
     sizeBytes: d.sizeBytes,
+    delivery: d.delivery || 'qr',
     status: d.status,
     policy: policyOut,
     accessCount: d.accessCount ?? 0,
@@ -192,27 +194,31 @@ function resolveDependencies(customDeps = {}) {
     compress: customDeps.compress || defaultCompress,
     decompress: customDeps.decompress || defaultDecompress,
     validateUpload: customDeps.validateUpload || defaultValidateUpload,
+    wrapDocumentKey: customDeps.wrapDocumentKey || defaultWrapDocumentKey,
     ...customDeps
   };
 }
 
 /**
  * Validates, compresses, seals, stores, and registers a new document.
- * Returns the documentKey ONCE encoded as base64url.
+ * Returns the documentKey ONCE encoded as base64url when delivery is 'qr',
+ * or returns { document } without documentKey when delivery is 'wrapped'.
  *
  * @param {{
  *   senderId: string,
  *   receiverEmail: string,
  *   file: { buffer: Buffer, originalName: string, declaredMime: string },
- *   policy?: object
+ *   policy?: object,
+ *   delivery?: 'wrapped'|'qr'
  * }} params
  * @param {{ ip?: string, userAgent?: string }} [ctx={}]
  * @param {object} [customDeps={}]
- * @returns {Promise<{ document: object, documentKey: string }>}
+ * @returns {Promise<{ document: object, documentKey?: string }>}
  */
 export async function sealDocument(params, ctx = {}, customDeps = {}) {
   const deps = resolveDependencies(customDeps);
-  const { senderId, receiverEmail, file, policy } = params;
+  const { senderId, receiverEmail, file, policy, delivery } = params;
+  const deliveryMode = delivery === 'wrapped' ? 'wrapped' : 'qr';
 
   if (!senderId) {
     throw AppError.unauthorized('Sender ID is required');
@@ -254,6 +260,12 @@ export async function sealDocument(params, ctx = {}, customDeps = {}) {
     throw AppError.badRequest('Receiver cannot be the sender');
   }
 
+  if (deliveryMode === 'wrapped') {
+    if (!receiverUser.vaultKey || !receiverUser.vaultKey.publicKey || !receiverUser.vaultKey.keyId) {
+      throw AppError.conflict('Receiver has not set up a vault key yet');
+    }
+  }
+
   // 3. Validate policy
   const normalizedPolicy = validatePolicy(policy);
 
@@ -266,6 +278,7 @@ export async function sealDocument(params, ctx = {}, customDeps = {}) {
     originalName: safeName,
     mimeType,
     sizeBytes: file.buffer.length,
+    delivery: deliveryMode,
     storage: {
       provider: env.STORAGE_DRIVER || 'memory',
       key: 'pending'
@@ -306,12 +319,27 @@ export async function sealDocument(params, ctx = {}, customDeps = {}) {
 
     const sealed = deps.sealBuffer(compressedData, docKey, aadBuffer);
 
+    let envelope = null;
+    if (deliveryMode === 'wrapped') {
+      envelope = deps.wrapDocumentKey({
+        docKey,
+        recipientPublicB64Url: receiverUser.vaultKey.publicKey,
+        recipientKeyId: receiverUser.vaultKey.keyId,
+        docId: pendingDocId.toString(),
+        receiverId: receiverIdStr
+      });
+    }
+
     // 7. Store encrypted ciphertext in storage adapter
     storedKey = deps.generateStorageKey();
     await deps.storage.put(storedKey, sealed.ciphertext);
 
-    // 8. Update Document to sealed status
+    // 8. Update Document to sealed status (including keyEnvelope in the same update)
     pendingDoc.status = 'sealed';
+    pendingDoc.delivery = deliveryMode;
+    if (envelope) {
+      pendingDoc.keyEnvelope = envelope;
+    }
     pendingDoc.storage = {
       provider: env.STORAGE_DRIVER || 'memory',
       key: storedKey
@@ -338,9 +366,18 @@ export async function sealDocument(params, ctx = {}, customDeps = {}) {
       meta: {
         receiverId: receiverIdStr,
         sizeBytes: file.buffer.length,
-        mimeType
+        mimeType,
+        delivery: deliveryMode
       }
     });
+
+    if (deliveryMode === 'wrapped') {
+      deps.wipe(docKey);
+      docKey = null;
+      return {
+        document: toPublicDoc(pendingDoc, senderId)
+      };
+    }
 
     const documentKeyB64Url = docKey.toString('base64url');
 

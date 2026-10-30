@@ -145,6 +145,7 @@ describe('Phase 3 End-to-End Test Suite: Real-Time Sealed Document Notifications
     // Upload document as sender targeting receiver
     const form = new FormData();
     form.append('receiverEmail', receiver.email);
+    form.append('delivery', 'qr');
     form.append('oneTimeUse', 'true');
     const pdfBlob = new Blob([Buffer.from('%PDF-1.7\nRealtime notification test document', 'utf8')], {
       type: 'application/pdf'
@@ -191,6 +192,7 @@ describe('Phase 3 End-to-End Test Suite: Real-Time Sealed Document Notifications
     // Both receiver and third party are disconnected
     const form = new FormData();
     form.append('receiverEmail', receiver.email);
+    form.append('delivery', 'qr');
     form.append('oneTimeUse', 'false');
     const pdfBlob = new Blob([Buffer.from('%PDF-1.7\nOffline delivery test document', 'utf8')], {
       type: 'application/pdf'

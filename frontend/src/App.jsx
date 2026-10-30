@@ -5,6 +5,7 @@ import { SocketProvider } from './realtime/SocketContext.jsx';
 import { ProtectedRoute } from './components/ProtectedRoute.jsx';
 import { Login } from './pages/Login.jsx';
 import { Register } from './pages/Register.jsx';
+import { MfaSetup } from './pages/MfaSetup.jsx';
 
 import { Dashboard } from './pages/Dashboard.jsx';
 import { Analytics } from './pages/Analytics.jsx';
@@ -42,6 +43,7 @@ export function App() {
             />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/mfa-setup" element={<MfaSetup />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
