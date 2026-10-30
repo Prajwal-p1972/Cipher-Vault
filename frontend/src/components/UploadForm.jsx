@@ -54,18 +54,23 @@ export function validateFile(file) {
 }
 
 /**
- * Document upload form enforcing client-side validations, ISO expiry limits,
- * atomic all-or-none geofencing, and structured server error status mapping.
+ * Document upload form supporting Secure Delivery (ECDH key-wrapped) and In-person QR handover.
  *
  * @param {{
- *   onSuccess: (data: { document: object, documentKey: string }) => void
+ *   onSuccess: (data: { document: object, documentKey?: string }) => void
  * }} props
  */
 export function UploadForm({ onSuccess }) {
   const [file, setFile] = useState(null);
   const [receiverEmail, setReceiverEmail] = useState('');
+  const [delivery, setDelivery] = useState('wrapped'); // 'wrapped' | 'qr'
   const [expiresAt, setExpiresAt] = useState('');
   const [oneTimeUse, setOneTimeUse] = useState(false);
+
+  // Receiver key check state for secure mode
+  const [checkingReceiverKey, setCheckingReceiverKey] = useState(false);
+  const [receiverKeyStatus, setReceiverKeyStatus] = useState(null); // 'found' | 'not_found' | null
+  const [receiverFingerprint, setReceiverFingerprint] = useState(null);
 
   // Geofence fields
   const [enableGeofence, setEnableGeofence] = useState(false);
@@ -78,8 +83,10 @@ export function UploadForm({ onSuccess }) {
   const [geoLocating, setGeoLocating] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
   const [errorDetails, setErrorDetails] = useState([]);
+  const [secureSuccessMessage, setSecureSuccessMessage] = useState(null);
 
   const fileInputId = useId();
+  const deliveryInputId = useId();
   const emailInputId = useId();
   const expiryInputId = useId();
   const oneTimeInputId = useId();
@@ -97,12 +104,40 @@ export function UploadForm({ onSuccess }) {
     setFile(selected);
     setErrorMessage(null);
     setErrorDetails([]);
+    setSecureSuccessMessage(null);
 
     if (selected) {
       const err = validateFile(selected);
       if (err) {
         setErrorMessage(err);
       }
+    }
+  };
+
+  const handleEmailBlur = async () => {
+    if (delivery !== 'wrapped') return;
+    const email = receiverEmail.trim();
+    if (!email || !email.includes('@')) {
+      setReceiverKeyStatus(null);
+      setReceiverFingerprint(null);
+      return;
+    }
+
+    setCheckingReceiverKey(true);
+    try {
+      const res = await request(`/api/keys/receiver?email=${encodeURIComponent(email)}`);
+      if (res && res.registered && res.fingerprint) {
+        setReceiverKeyStatus('found');
+        setReceiverFingerprint(res.fingerprint);
+      } else {
+        setReceiverKeyStatus('not_found');
+        setReceiverFingerprint(null);
+      }
+    } catch (_) {
+      setReceiverKeyStatus('not_found');
+      setReceiverFingerprint(null);
+    } finally {
+      setCheckingReceiverKey(false);
     }
   };
 
@@ -137,6 +172,7 @@ export function UploadForm({ onSuccess }) {
     e.preventDefault();
     setErrorMessage(null);
     setErrorDetails([]);
+    setSecureSuccessMessage(null);
 
     // 1. Validate File
     const fileError = validateFile(file);
@@ -151,7 +187,13 @@ export function UploadForm({ onSuccess }) {
       return;
     }
 
-    // 3. Validate Expiry Bounds if provided
+    // 3. In Secure mode, enforce verified receiver key
+    if (delivery === 'wrapped' && receiverKeyStatus === 'not_found') {
+      setErrorMessage('Recipient has not set up a vault key. They must set up a browser vault key to receive secure deliveries, or you can switch to In-person QR handover.');
+      return;
+    }
+
+    // 4. Validate Expiry Bounds if provided
     let isoExpiresAt = null;
     if (expiresAt) {
       const expDate = new Date(expiresAt);
@@ -171,7 +213,7 @@ export function UploadForm({ onSuccess }) {
       isoExpiresAt = expDate.toISOString();
     }
 
-    // 4. Validate Geofence (all-or-none)
+    // 5. Validate Geofence (all-or-none)
     const hasAnyGeo =
       enableGeofence ||
       geoLat.trim() !== '' ||
@@ -210,10 +252,11 @@ export function UploadForm({ onSuccess }) {
       };
     }
 
-    // 5. Construct FormData
+    // 6. Construct FormData
     const formData = new FormData();
     formData.append('file', file);
     formData.append('receiverEmail', receiverEmail.trim());
+    formData.append('delivery', delivery);
     formData.append('oneTimeUse', oneTimeUse ? 'true' : 'false');
 
     if (isoExpiresAt) {
@@ -226,7 +269,7 @@ export function UploadForm({ onSuccess }) {
       formData.append('geoRadiusMeters', String(validatedGeo.radiusMeters));
     }
 
-    // 6. Submit with UI progress & structured error mapping
+    // 7. Submit with UI progress & structured error mapping
     setSubmitting(true);
 
     try {
@@ -235,7 +278,7 @@ export function UploadForm({ onSuccess }) {
         body: formData
       });
 
-      // Reset form
+      // Reset form fields
       setFile(null);
       setReceiverEmail('');
       setExpiresAt('');
@@ -244,6 +287,12 @@ export function UploadForm({ onSuccess }) {
       setGeoLat('');
       setGeoLng('');
       setGeoRadiusMeters('500');
+      setReceiverKeyStatus(null);
+      setReceiverFingerprint(null);
+
+      if (delivery === 'wrapped') {
+        setSecureSuccessMessage('Document securely sealed and delivered! The recipient can open it directly in their verified browser without a QR code.');
+      }
 
       if (typeof onSuccess === 'function') {
         onSuccess(result);
@@ -257,6 +306,8 @@ export function UploadForm({ onSuccess }) {
           }
         } else if (err.status === 404) {
           setErrorMessage('Recipient user not found. Please verify the recipient email address.');
+        } else if (err.status === 409) {
+          setErrorMessage('Recipient has not registered a vault key for secure delivery. Switch to In-person QR handover or ask them to set up a vault key.');
         } else if (err.status === 413) {
           setErrorMessage('File too large. Maximum allowed file size is 25 MB.');
         } else if (err.status === 429) {
@@ -272,8 +323,30 @@ export function UploadForm({ onSuccess }) {
     }
   };
 
+  const isSubmitDisabled =
+    submitting ||
+    (delivery === 'wrapped' && receiverKeyStatus === 'not_found');
+
   return (
     <form onSubmit={handleSubmit} className="upload-form" noValidate>
+      {secureSuccessMessage && (
+        <div
+          data-testid="secure-upload-success"
+          role="status"
+          style={{
+            backgroundColor: '#ecfdf5',
+            border: '1px solid #a7f3d0',
+            color: '#065f46',
+            borderRadius: '8px',
+            padding: '0.85rem 1rem',
+            marginBottom: '1.25rem',
+            fontSize: '0.875rem'
+          }}
+        >
+          {secureSuccessMessage}
+        </div>
+      )}
+
       {errorMessage && (
         <div
           className="alert alert-error"
@@ -292,6 +365,33 @@ export function UploadForm({ onSuccess }) {
           )}
         </div>
       )}
+
+      {/* Delivery Mode Selector */}
+      <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+        <label htmlFor={deliveryInputId} className="form-label" style={{ fontWeight: 600 }}>
+          Delivery Method <span style={{ color: '#dc2626' }}>*</span>
+        </label>
+        <select
+          id={deliveryInputId}
+          value={delivery}
+          onChange={(e) => {
+            setDelivery(e.target.value);
+            setErrorMessage(null);
+            setSecureSuccessMessage(null);
+          }}
+          disabled={submitting}
+          className="form-input"
+          style={{ padding: '0.5rem' }}
+        >
+          <option value="wrapped">Secure delivery (recommended)</option>
+          <option value="qr">In-person QR handover</option>
+        </select>
+        <span style={{ fontSize: '0.78rem', color: '#64748b', display: 'block', marginTop: '0.35rem' }}>
+          {delivery === 'wrapped'
+            ? 'Delivers the encryption key directly to the recipient’s browser vault key (no QR code required).'
+            : 'Generates a one-time cryptographic QR code for in-person handover.'}
+        </span>
+      </div>
 
       {/* File Upload Field */}
       <div className="form-group" style={{ marginBottom: '1.25rem' }}>
@@ -322,11 +422,67 @@ export function UploadForm({ onSuccess }) {
           type="email"
           placeholder="receiver@example.com"
           value={receiverEmail}
-          onChange={(e) => setReceiverEmail(e.target.value)}
+          onChange={(e) => {
+            setReceiverEmail(e.target.value);
+            setSecureSuccessMessage(null);
+            if (receiverKeyStatus) {
+              setReceiverKeyStatus(null);
+              setReceiverFingerprint(null);
+            }
+          }}
+          onBlur={handleEmailBlur}
           disabled={submitting}
           required
           className="form-input"
         />
+
+        {checkingReceiverKey && (
+          <span style={{ fontSize: '0.78rem', color: '#64748b', display: 'block', marginTop: '0.35rem' }}>
+            Checking recipient vault key...
+          </span>
+        )}
+
+        {delivery === 'wrapped' && receiverKeyStatus === 'found' && receiverFingerprint && (
+          <div
+            data-testid="receiver-fingerprint-box"
+            style={{
+              marginTop: '0.5rem',
+              padding: '0.65rem 0.85rem',
+              backgroundColor: '#f0fdf4',
+              border: '1px solid #bbf7d0',
+              borderRadius: '6px',
+              fontSize: '0.8rem',
+              color: '#166534'
+            }}
+          >
+            <div>
+              <strong>Receiver key fingerprint:</strong>{' '}
+              <code style={{ fontFamily: 'ui-monospace, monospace', fontWeight: 700 }}>
+                {receiverFingerprint}
+              </code>
+            </div>
+            <div style={{ marginTop: '0.25rem', fontSize: '0.75rem', color: '#15803d' }}>
+              Ask them to confirm it matches the one on their screen.
+            </div>
+          </div>
+        )}
+
+        {delivery === 'wrapped' && receiverKeyStatus === 'not_found' && (
+          <div
+            data-testid="receiver-no-key-box"
+            style={{
+              marginTop: '0.5rem',
+              padding: '0.65rem 0.85rem',
+              backgroundColor: '#fff1f2',
+              border: '1px solid #fecdd3',
+              borderRadius: '6px',
+              fontSize: '0.8rem',
+              color: '#9f1239'
+            }}
+          >
+            Recipient has not set up a vault key. They must set up a browser vault key to receive secure deliveries, or you can switch to In-person QR handover.
+          </div>
+        )}
       </div>
 
       {/* Expiry Date/Time */}
@@ -349,52 +505,54 @@ export function UploadForm({ onSuccess }) {
         </span>
       </div>
 
-      {/* One-Time Use Checkbox */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.6rem',
-          marginBottom: '1.5rem',
-          cursor: 'pointer'
-        }}
-      >
-        <input
-          id={oneTimeInputId}
-          type="checkbox"
-          checked={oneTimeUse}
-          onChange={(e) => setOneTimeUse(e.target.checked)}
-          disabled={submitting}
-          style={{ width: '1.1rem', height: '1.1rem', cursor: 'pointer' }}
-        />
+      {/* One-Time Access Checkbox */}
+      <div className="form-group" style={{ marginBottom: '1.25rem' }}>
         <label
           htmlFor={oneTimeInputId}
-          style={{ fontSize: '0.9rem', color: '#1e293b', cursor: 'pointer', userSelect: 'none' }}
-        >
-          <strong>One-Time Access:</strong> Document self-destructs after first decryption
-        </label>
-      </div>
-
-      {/* Geofencing Section */}
-      <div
-        style={{
-          border: '1px solid #e2e8f0',
-          borderRadius: '8px',
-          padding: '1.25rem',
-          backgroundColor: '#f8fafc',
-          marginBottom: '1.5rem'
-        }}
-      >
-        <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '1rem',
-            marginBottom: enableGeofence ? '1rem' : 0
+            gap: '0.5rem',
+            cursor: submitting ? 'not-allowed' : 'pointer',
+            fontSize: '0.875rem',
+            fontWeight: 500
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          <input
+            id={oneTimeInputId}
+            type="checkbox"
+            checked={oneTimeUse}
+            onChange={(e) => setOneTimeUse(e.target.checked)}
+            disabled={submitting}
+            style={{ width: '1.1rem', height: '1.1rem', cursor: 'pointer' }}
+          />
+          <span>One-Time Access (Self-destructs after single decryption)</span>
+        </label>
+      </div>
+
+      {/* Geofence Configuration Section */}
+      <div
+        className="geofence-section"
+        style={{
+          border: '1px solid #e2e8f0',
+          borderRadius: '8px',
+          padding: '1rem',
+          marginBottom: '1.5rem',
+          backgroundColor: '#f8fafc'
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <label
+            htmlFor={geofenceCheckboxId}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              cursor: submitting ? 'not-allowed' : 'pointer',
+              fontSize: '0.875rem',
+              fontWeight: 600
+            }}
+          >
             <input
               id={geofenceCheckboxId}
               type="checkbox"
@@ -403,13 +561,8 @@ export function UploadForm({ onSuccess }) {
               disabled={submitting}
               style={{ width: '1.1rem', height: '1.1rem', cursor: 'pointer' }}
             />
-            <label
-              htmlFor={geofenceCheckboxId}
-              style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1e293b', cursor: 'pointer' }}
-            >
-              Enforce Geofenced Decryption (Optional)
-            </label>
-          </div>
+            <span>Enforce Geofenced Decryption</span>
+          </label>
 
           {enableGeofence && (
             <button
@@ -419,17 +572,17 @@ export function UploadForm({ onSuccess }) {
               className="btn btn-secondary"
               style={{
                 fontSize: '0.78rem',
-                padding: '0.35rem 0.75rem',
-                width: 'auto'
+                padding: '0.35rem 0.65rem',
+                cursor: submitting || geoLocating ? 'not-allowed' : 'pointer'
               }}
             >
-              {geoLocating ? 'Locating...' : 'Use my current location'}
+              {geoLocating ? 'Locating...' : 'Use My Location'}
             </button>
           )}
         </div>
 
         {enableGeofence && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+          <div style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
             <div className="form-group">
               <label htmlFor={latInputId} className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>
                 Latitude (-90 to 90)
@@ -466,7 +619,7 @@ export function UploadForm({ onSuccess }) {
               />
             </div>
 
-            <div className="form-group">
+            <div className="form-group" style={{ gridColumn: 'span 2' }}>
               <label htmlFor={radiusInputId} className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>
                 Radius (meters: 1 - 100,000)
               </label>
@@ -489,13 +642,15 @@ export function UploadForm({ onSuccess }) {
       {/* Submit Button with Loading State */}
       <button
         type="submit"
-        disabled={submitting}
+        disabled={isSubmitDisabled}
         className="btn btn-primary"
         style={{
           width: '100%',
           padding: '0.75rem 1rem',
           fontSize: '0.95rem',
-          fontWeight: 600
+          fontWeight: 600,
+          cursor: isSubmitDisabled ? 'not-allowed' : 'pointer',
+          opacity: isSubmitDisabled ? 0.6 : 1
         }}
       >
         {submitting ? 'Sealing & Uploading Document...' : 'Seal & Send Document'}

@@ -6,6 +6,9 @@ import { DocumentViewer } from './DocumentViewer.jsx';
 import { encodePayload } from '../utils/qrPayload.js';
 import * as httpModule from '../api/http.js';
 import * as geoModule from '../utils/geolocation.js';
+import crypto from 'node:crypto';
+import { AuthContext } from '../auth/AuthContext.jsx';
+import { generateVaultKey, saveKey } from '../crypto/vaultKeys.js';
 
 // Mock QrScanner to deterministically feed scan strings into UnlockModal
 vi.mock('./QrScanner.jsx', () => ({
@@ -354,6 +357,280 @@ describe('UnlockModal & DocumentViewer Security and Integration Tests', () => {
 
       // Unmount safeguard
       unmount();
+    });
+  });
+
+  describe('Phase 7 Batch 2 Wrapped Delivery Flow', () => {
+    const WRAPPED_DOC_ID = '777788889999aaaabbbbcccc';
+    const TEST_RECEIVER_ID = 'receiver_vault_user_42';
+    const RAW_DOC_KEY_BYTES = new Uint8Array([
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+      17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32
+    ]);
+    const EXPECTED_B64_KEY = Buffer.from(RAW_DOC_KEY_BYTES).toString('base64url');
+
+    function nodeWrap({ docKeyBytes, recipientPublicBytes, recipientKeyId, docId, receiverId }) {
+      const ephemeral = crypto.createECDH('prime256v1');
+      ephemeral.generateKeys();
+      const epk = ephemeral.getPublicKey().toString('base64url');
+      const shared = ephemeral.computeSecret(Buffer.from(recipientPublicBytes));
+      const saltBuf = crypto.randomBytes(32);
+      const salt = saltBuf.toString('base64url');
+      const ivBuf = crypto.randomBytes(12);
+      const iv = ivBuf.toString('base64url');
+      const infoStr = 'cipher-vault/keywrap/v1|' + String(docId) + '|' + String(receiverId) + '|' + String(recipientKeyId);
+      const info = Buffer.from(infoStr, 'utf8');
+      const kek = Buffer.from(crypto.hkdfSync('sha256', shared, saltBuf, info, 32));
+      const cipher = crypto.createCipheriv('aes-256-gcm', kek, ivBuf);
+      cipher.setAAD(info);
+      const ctPart = cipher.update(Buffer.from(docKeyBytes));
+      const finalPart = cipher.final();
+      const tag = cipher.getAuthTag();
+      const ct = Buffer.concat([ctPart, finalPart, tag]).toString('base64url');
+      return {
+        v: 1,
+        alg: 'ECDH-P256-HKDF-SHA256-A256GCM',
+        recipientKeyId,
+        epk,
+        salt,
+        iv,
+        ct
+      };
+    }
+
+    it('wrapped documents skip scan step, unwrap key into ref, and proceed to MFA code entry', async () => {
+      const keyData = await generateVaultKey();
+      await saveKey(TEST_RECEIVER_ID, keyData);
+
+      const envelope = nodeWrap({
+        docKeyBytes: RAW_DOC_KEY_BYTES,
+        recipientPublicBytes: keyData.publicRaw,
+        recipientKeyId: keyData.keyId,
+        docId: WRAPPED_DOC_ID,
+        receiverId: TEST_RECEIVER_ID
+      });
+
+      globalThis.fetch = vi.fn(async (url) => {
+        if (url.includes(`/api/documents/${WRAPPED_DOC_ID}/key-envelope`)) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ envelope })
+          };
+        }
+        return { ok: true, status: 200, json: async () => ({}) };
+      });
+
+      const wrappedDoc = {
+        id: WRAPPED_DOC_ID,
+        originalName: 'secure_spec.pdf',
+        delivery: 'wrapped',
+        receiver: TEST_RECEIVER_ID,
+        hasGeofence: false
+      };
+
+      render(
+        <AuthContext.Provider value={{ user: { id: TEST_RECEIVER_ID } }}>
+          <UnlockModal document={wrappedDoc} onSuccess={vi.fn()} onClose={vi.fn()} />
+        </AuthContext.Provider>
+      );
+
+      // Verify scan step is SKIPPED
+      expect(screen.queryByTestId('mock-qr-scanner')).toBeNull();
+
+      // Verify transitions to MFA verification
+      const codeInput = await screen.findByLabelText(/Authenticator MFA Code/i);
+      expect(codeInput).toBeTruthy();
+    });
+
+    it('sends unwrapped key only in /open request body and immediately drops it', async () => {
+      const keyData = await generateVaultKey();
+      await saveKey(TEST_RECEIVER_ID, keyData);
+
+      const envelope = nodeWrap({
+        docKeyBytes: RAW_DOC_KEY_BYTES,
+        recipientPublicBytes: keyData.publicRaw,
+        recipientKeyId: keyData.keyId,
+        docId: WRAPPED_DOC_ID,
+        receiverId: TEST_RECEIVER_ID
+      });
+
+      globalThis.fetch = vi.fn(async (url) => {
+        if (url.includes(`/api/documents/${WRAPPED_DOC_ID}/key-envelope`)) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ envelope })
+          };
+        }
+        return { ok: true, status: 200, json: async () => ({}) };
+      });
+
+      const requestBlobSpy = vi.spyOn(httpModule, 'requestBlob').mockResolvedValue({
+        status: 200,
+        blob: new Blob(['pdf-bytes'], { type: 'application/pdf' }),
+        headers: new Headers({
+          'content-type': 'application/pdf',
+          'x-document-name': 'secure_spec.pdf'
+        })
+      });
+
+      const onSuccess = vi.fn();
+      const wrappedDoc = {
+        id: WRAPPED_DOC_ID,
+        originalName: 'secure_spec.pdf',
+        delivery: 'wrapped',
+        receiver: TEST_RECEIVER_ID,
+        hasGeofence: false
+      };
+
+      render(
+        <AuthContext.Provider value={{ user: { id: TEST_RECEIVER_ID } }}>
+          <UnlockModal document={wrappedDoc} onSuccess={onSuccess} onClose={vi.fn()} />
+        </AuthContext.Provider>
+      );
+
+      const codeInput = await screen.findByLabelText(/Authenticator MFA Code/i);
+      fireEvent.change(codeInput, { target: { value: '556677' } });
+
+      const submitBtn = screen.getByRole('button', { name: /Unlock Document/i });
+      fireEvent.click(submitBtn);
+
+      await waitFor(() => {
+        expect(requestBlobSpy).toHaveBeenCalledTimes(1);
+      });
+
+      const [path, options] = requestBlobSpy.mock.calls[0];
+      expect(path).toBe(`/api/documents/${WRAPPED_DOC_ID}/open`);
+      expect(options.body).toEqual({
+        documentKey: EXPECTED_B64_KEY,
+        code: '556677'
+      });
+
+      expect(onSuccess).toHaveBeenCalled();
+
+      // Key must not exist in DOM
+      expect(document.body.innerHTML).not.toContain(EXPECTED_B64_KEY);
+    });
+
+    it('shows clear message when key is not in this browser and offers nothing to send the key', async () => {
+      const orphanKeyId = 'deadbeef0000111122223333444455556666777788889999aaaabbbbccccdddd';
+      const fakeEnvelope = {
+        v: 1,
+        alg: 'ECDH-P256-HKDF-SHA256-A256GCM',
+        recipientKeyId: orphanKeyId,
+        epk: 'test-epk',
+        salt: 'test-salt',
+        iv: 'test-iv',
+        ct: 'test-ct'
+      };
+
+      globalThis.fetch = vi.fn(async (url) => {
+        if (url.includes('/key-envelope')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ envelope: fakeEnvelope })
+          };
+        }
+        return { ok: true, status: 200, json: async () => ({}) };
+      });
+
+      const wrappedDoc = {
+        id: WRAPPED_DOC_ID,
+        originalName: 'other_browser_doc.pdf',
+        delivery: 'wrapped',
+        receiver: TEST_RECEIVER_ID
+      };
+
+      render(
+        <AuthContext.Provider value={{ user: { id: TEST_RECEIVER_ID } }}>
+          <UnlockModal document={wrappedDoc} onSuccess={vi.fn()} onClose={vi.fn()} />
+        </AuthContext.Provider>
+      );
+
+      // Must display exact message:
+      const missingMsg = await screen.findByText(/This document was sent to a key that is not in this browser/i);
+      expect(missingMsg).toBeTruthy();
+
+      // Must NOT render input to enter a key, upload a key, or any button that sends key material
+      expect(screen.queryByLabelText(/Authenticator MFA Code/i)).toBeNull();
+      expect(screen.queryByRole('button', { name: /Send Key/i })).toBeNull();
+      expect(screen.queryByRole('button', { name: /Export Key/i })).toBeNull();
+
+      // Only a Close/Cancel button is presented
+      const closeBtn = screen.getByRole('button', { name: /Close/i });
+      expect(closeBtn).toBeTruthy();
+    });
+
+    it('never writes key, code, or envelope to storage or console', async () => {
+      const consoleLogSpy = vi.spyOn(console, 'log');
+      const consoleWarnSpy = vi.spyOn(console, 'warn');
+      const consoleErrorSpy = vi.spyOn(console, 'error');
+      const setItemSpy = vi.spyOn(Storage.prototype, 'setItem');
+
+      const keyData = await generateVaultKey();
+      await saveKey(TEST_RECEIVER_ID, keyData);
+
+      const envelope = nodeWrap({
+        docKeyBytes: RAW_DOC_KEY_BYTES,
+        recipientPublicBytes: keyData.publicRaw,
+        recipientKeyId: keyData.keyId,
+        docId: WRAPPED_DOC_ID,
+        receiverId: TEST_RECEIVER_ID
+      });
+
+      globalThis.fetch = vi.fn(async (url) => {
+        if (url.includes('/key-envelope')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ envelope })
+          };
+        }
+        return { ok: true, status: 200, json: async () => ({}) };
+      });
+
+      vi.spyOn(httpModule, 'requestBlob').mockResolvedValue({
+        status: 200,
+        blob: new Blob(['ok'], { type: 'application/pdf' }),
+        headers: new Headers({ 'content-type': 'application/pdf' })
+      });
+
+      const wrappedDoc = {
+        id: WRAPPED_DOC_ID,
+        originalName: 'no_leak.pdf',
+        delivery: 'wrapped',
+        receiver: TEST_RECEIVER_ID
+      };
+
+      const { unmount } = render(
+        <AuthContext.Provider value={{ user: { id: TEST_RECEIVER_ID } }}>
+          <UnlockModal document={wrappedDoc} onSuccess={vi.fn()} onClose={vi.fn()} />
+        </AuthContext.Provider>
+      );
+
+      const codeInput = await screen.findByLabelText(/Authenticator MFA Code/i);
+      fireEvent.change(codeInput, { target: { value: '987654' } });
+
+      const submitBtn = screen.getByRole('button', { name: /Unlock Document/i });
+      fireEvent.click(submitBtn);
+
+      await waitFor(() => {
+        expect(setItemSpy).not.toHaveBeenCalled();
+      });
+
+      unmount();
+
+      for (const spy of [consoleLogSpy, consoleWarnSpy, consoleErrorSpy]) {
+        for (const call of spy.mock.calls) {
+          for (const arg of call) {
+            expect(String(arg)).not.toContain(EXPECTED_B64_KEY);
+            expect(String(arg)).not.toContain('987654');
+            expect(String(arg)).not.toContain(envelope.ct);
+          }
+        }
+      }
     });
   });
 });

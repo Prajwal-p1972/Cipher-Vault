@@ -197,7 +197,22 @@ export function DocumentTable({
                 </td>
 
                 <td style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>
-                  <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <span
+                      data-testid="delivery-badge"
+                      style={{
+                        display: 'inline-block',
+                        padding: '0.15rem 0.45rem',
+                        borderRadius: '4px',
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        backgroundColor: doc.delivery === 'wrapped' ? '#eff6ff' : '#f5f3ff',
+                        color: doc.delivery === 'wrapped' ? '#1d4ed8' : '#6d28d9',
+                        border: `1px solid ${doc.delivery === 'wrapped' ? '#bfdbfe' : '#ddd6fe'}`
+                      }}
+                    >
+                      {doc.delivery === 'wrapped' ? 'Secure delivery' : 'QR handover'}
+                    </span>
                     {isOneTime && (
                       <span
                         title="Self-destructs after one decryption"
@@ -231,9 +246,6 @@ export function DocumentTable({
                       >
                         Geofenced
                       </span>
-                    )}
-                    {!isOneTime && !isGeofenced && (
-                      <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>&mdash;</span>
                     )}
                   </div>
                 </td>

@@ -8,6 +8,8 @@ import { KeyRevealModal } from '../components/KeyRevealModal.jsx';
 import { UnlockModal } from '../components/UnlockModal.jsx';
 import { DocumentViewer } from '../components/DocumentViewer.jsx';
 import { AuditDashboard } from '../components/AuditDashboard.jsx';
+import { useVaultKey } from '../hooks/useVaultKey.js';
+import { VaultKeySetup } from '../components/VaultKeySetup.jsx';
 
 /**
  * Main application dashboard featuring Received / Sent / New Upload views,
@@ -22,6 +24,11 @@ export function Dashboard() {
   const [sealedKeyData, setSealedKeyData] = useState(null);
   const [unlockingDoc, setUnlockingDoc] = useState(null);
   const [viewingDocData, setViewingDocData] = useState(null);
+
+  // Vault key status & modal
+  const { status: vaultStatus, refresh: refreshVaultKey } = useVaultKey();
+  const [showVaultKeyModal, setShowVaultKeyModal] = useState(false);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
 
   // Notification and Toast state
   const [toasts, setToasts] = useState([]);
@@ -214,6 +221,74 @@ export function Dashboard() {
           </button>
         </div>
 
+        {/* Dismissible Vault Key Status Banner */}
+        {!bannerDismissed && (vaultStatus === 'none' || vaultStatus === 'mismatch') && (
+          <div
+            data-testid="vault-key-banner"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: vaultStatus === 'mismatch' ? '#fff1f2' : '#eff6ff',
+              border: `1px solid ${vaultStatus === 'mismatch' ? '#fecdd3' : '#bfdbfe'}`,
+              borderRadius: '8px',
+              padding: '0.85rem 1.25rem',
+              marginBottom: '1.5rem',
+              gap: '1rem',
+              boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <span style={{ fontSize: '1.25rem' }}>
+                {vaultStatus === 'mismatch' ? '⚠️' : '🔑'}
+              </span>
+              <div style={{ fontSize: '0.875rem', color: vaultStatus === 'mismatch' ? '#9f1239' : '#1e40af' }}>
+                {vaultStatus === 'mismatch' ? (
+                  <>
+                    <strong>Vault Key Mismatch:</strong> This browser does not hold the private key for your registered vault key. Documents sent to that key cannot be opened on this device.
+                  </>
+                ) : (
+                  <>
+                    <strong>Enable Secure Delivery:</strong> Set up a browser vault key so senders can deliver documents directly without sharing a QR code.
+                  </>
+                )}
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={() => setShowVaultKeyModal(true)}
+                className={`btn ${vaultStatus === 'mismatch' ? 'btn-secondary' : 'btn-primary'}`}
+                style={{
+                  padding: '0.35rem 0.85rem',
+                  fontSize: '0.8rem',
+                  width: 'auto',
+                  borderColor: vaultStatus === 'mismatch' ? '#f43f5e' : undefined,
+                  color: vaultStatus === 'mismatch' ? '#be123c' : undefined
+                }}
+              >
+                {vaultStatus === 'mismatch' ? 'Resolve Mismatch' : 'Set Up Vault Key'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setBannerDismissed(true)}
+                aria-label="Dismiss banner"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '1.25rem',
+                  color: '#64748b',
+                  cursor: 'pointer',
+                  padding: '0 0.25rem',
+                  lineHeight: 1
+                }}
+              >
+                &times;
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Global Loading State */}
         {loading && (
           <div
@@ -359,6 +434,38 @@ export function Dashboard() {
           originalName={viewingDocData.originalName}
           onClose={() => setViewingDocData(null)}
         />
+      )}
+
+      {/* Vault Key Setup Modal */}
+      {showVaultKeyModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '1.5rem'
+          }}
+        >
+          <div style={{ width: '100%', maxWidth: '560px' }}>
+            <VaultKeySetup
+              onClose={() => setShowVaultKeyModal(false)}
+              onSuccess={() => {
+                setShowVaultKeyModal(false);
+                refreshVaultKey();
+              }}
+            />
+          </div>
+        </div>
       )}
     </Layout>
   );

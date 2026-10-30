@@ -203,4 +203,213 @@ describe('UploadForm Component Tests', () => {
       unmount();
     }
   });
+
+  describe('Phase 7 Batch 2 Secure Delivery & Vault Key Integration', () => {
+    it('defaults delivery selector to wrapped mode', () => {
+      render(<UploadForm onSuccess={vi.fn()} />);
+      const deliverySelect = screen.getByLabelText(/Delivery Method/i);
+      expect(deliverySelect.value).toBe('wrapped');
+    });
+
+    it('fetches receiver key on blur and displays fingerprint in wrapped mode', async () => {
+      globalThis.fetch = vi.fn(async (url) => {
+        if (url.includes('/api/keys/receiver')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              registered: true,
+              fingerprint: '1111 2222 3333 4444 5555 6666 7777 8888'
+            })
+          };
+        }
+        return { ok: true, status: 200, json: async () => ({}) };
+      });
+
+      render(<UploadForm onSuccess={vi.fn()} />);
+
+      const emailInput = screen.getByLabelText(/Recipient Email/i);
+      fireEvent.change(emailInput, { target: { value: 'alice@example.com' } });
+      fireEvent.blur(emailInput);
+
+      expect(await screen.findByText(/Receiver key fingerprint:/i)).toBeTruthy();
+      expect(screen.getByText('1111 2222 3333 4444 5555 6666 7777 8888')).toBeTruthy();
+      expect(screen.getByText(/Ask them to confirm it matches the one on their screen/i)).toBeTruthy();
+    });
+
+    it('disables submit button and shows warning when recipient has no registered vault key in wrapped mode', async () => {
+      globalThis.fetch = vi.fn(async (url) => {
+        if (url.includes('/api/keys/receiver')) {
+          return {
+            ok: false,
+            status: 404,
+            json: async () => ({ error: 'Not Found' })
+          };
+        }
+        return { ok: true, status: 200, json: async () => ({}) };
+      });
+
+      render(<UploadForm onSuccess={vi.fn()} />);
+
+      const fileInput = screen.getByLabelText(/Document File/i);
+      const emailInput = screen.getByLabelText(/Recipient Email/i);
+      const submitBtn = screen.getByRole('button', { name: /Seal & Send Document/i });
+
+      const validFile = new File(['data'], 'contract.pdf', { type: 'application/pdf' });
+      fireEvent.change(fileInput, { target: { files: [validFile] } });
+      fireEvent.change(emailInput, { target: { value: 'nokey@example.com' } });
+      fireEvent.blur(emailInput);
+
+      expect(
+        await screen.findByText(/Recipient has not set up a vault key/i)
+      ).toBeTruthy();
+      expect(submitBtn.disabled).toBe(true);
+    });
+
+    it('submits FormData containing delivery field', async () => {
+      let capturedBody = null;
+      globalThis.fetch = vi.fn(async (url, init) => {
+        if (url.includes('/api/keys/receiver')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ registered: true, fingerprint: 'aaaa bbbb cccc dddd eeee ffff gggg hhhh' })
+          };
+        }
+        if (url.includes('/api/documents')) {
+          capturedBody = init.body;
+          return {
+            ok: true,
+            status: 201,
+            json: async () => ({
+              document: { id: 'doc-wrapped-1', delivery: 'wrapped', originalName: 'report.pdf' }
+            })
+          };
+        }
+        return { ok: true, status: 200, json: async () => ({}) };
+      });
+
+      render(<UploadForm onSuccess={vi.fn()} />);
+
+      const fileInput = screen.getByLabelText(/Document File/i);
+      const emailInput = screen.getByLabelText(/Recipient Email/i);
+      const submitBtn = screen.getByRole('button', { name: /Seal & Send Document/i });
+
+      const validFile = new File(['data'], 'report.pdf', { type: 'application/pdf' });
+      fireEvent.change(fileInput, { target: { files: [validFile] } });
+      fireEvent.change(emailInput, { target: { value: 'bob@example.com' } });
+      fireEvent.blur(emailInput);
+
+      await screen.findByText(/Receiver key fingerprint:/i);
+      fireEvent.click(submitBtn);
+
+      await waitFor(() => {
+        expect(capturedBody).toBeInstanceOf(FormData);
+      });
+      expect(capturedBody.get('delivery')).toBe('wrapped');
+    });
+
+    it('shows secure upload success message and no key or QR after secure upload', async () => {
+      const onSuccess = vi.fn();
+      globalThis.fetch = vi.fn(async (url) => {
+        if (url.includes('/api/keys/receiver')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ registered: true, fingerprint: '1234 5678 1234 5678 1234 5678 1234 5678' })
+          };
+        }
+        if (url.includes('/api/documents')) {
+          return {
+            ok: true,
+            status: 201,
+            json: async () => ({
+              document: { id: 'doc-secure-77', delivery: 'wrapped', originalName: 'confidential.pdf' }
+              // NOTE: secure upload does NOT include documentKey
+            })
+          };
+        }
+        return { ok: true, status: 200, json: async () => ({}) };
+      });
+
+      render(<UploadForm onSuccess={onSuccess} />);
+
+      const fileInput = screen.getByLabelText(/Document File/i);
+      const emailInput = screen.getByLabelText(/Recipient Email/i);
+      const submitBtn = screen.getByRole('button', { name: /Seal & Send Document/i });
+
+      const validFile = new File(['secret'], 'confidential.pdf', { type: 'application/pdf' });
+      fireEvent.change(fileInput, { target: { files: [validFile] } });
+      fireEvent.change(emailInput, { target: { value: 'alice@example.com' } });
+      fireEvent.blur(emailInput);
+
+      await screen.findByText(/Receiver key fingerprint:/i);
+      fireEvent.click(submitBtn);
+
+      const successNotice = await screen.findByTestId('secure-upload-success');
+      expect(successNotice).toBeTruthy();
+      expect(successNotice.textContent).toContain('Document securely sealed and delivered');
+
+      // Ensure no QR canvas, qr code elements or keys appear in DOM
+      expect(screen.queryByTestId('key-reveal-modal')).toBeNull();
+      expect(document.body.innerHTML).not.toContain('Scan with Phone');
+
+      expect(onSuccess).toHaveBeenCalledWith({
+        document: { id: 'doc-secure-77', delivery: 'wrapped', originalName: 'confidential.pdf' }
+      });
+      // documentKey was NOT returned or passed
+      expect(onSuccess.mock.calls[0][0].documentKey).toBeUndefined();
+    });
+
+    it('keeps existing QR mode flow unchanged with documentKey passed to onSuccess', async () => {
+      let capturedBody = null;
+      const onSuccess = vi.fn();
+      globalThis.fetch = vi.fn(async (url, init) => {
+        if (url.includes('/api/documents')) {
+          capturedBody = init.body;
+          return {
+            ok: true,
+            status: 201,
+            json: async () => ({
+              document: { id: 'doc-qr-99', delivery: 'qr', originalName: 'qr-plan.pdf' },
+              documentKey: 'raw-doc-key-xyz-789'
+            })
+          };
+        }
+        return { ok: true, status: 200, json: async () => ({}) };
+      });
+
+      render(<UploadForm onSuccess={onSuccess} />);
+
+      // Switch to QR handover
+      const deliverySelect = screen.getByLabelText(/Delivery Method/i);
+      fireEvent.change(deliverySelect, { target: { value: 'qr' } });
+
+      const fileInput = screen.getByLabelText(/Document File/i);
+      const emailInput = screen.getByLabelText(/Recipient Email/i);
+      const submitBtn = screen.getByRole('button', { name: /Seal & Send Document/i });
+
+      const validFile = new File(['data'], 'qr-plan.pdf', { type: 'application/pdf' });
+      fireEvent.change(fileInput, { target: { files: [validFile] } });
+      fireEvent.change(emailInput, { target: { value: 'receiver@example.com' } });
+      fireEvent.blur(emailInput);
+
+      // In QR mode, receiver key check is not triggered
+      expect(screen.queryByText(/Receiver key fingerprint:/i)).toBeNull();
+      expect(submitBtn.disabled).toBe(false);
+
+      fireEvent.click(submitBtn);
+
+      await waitFor(() => {
+        expect(onSuccess).toHaveBeenCalledWith({
+          document: { id: 'doc-qr-99', delivery: 'qr', originalName: 'qr-plan.pdf' },
+          documentKey: 'raw-doc-key-xyz-789'
+        });
+      });
+
+      expect(capturedBody.get('delivery')).toBe('qr');
+      expect(screen.queryByTestId('secure-upload-success')).toBeNull();
+    });
+  });
 });
+

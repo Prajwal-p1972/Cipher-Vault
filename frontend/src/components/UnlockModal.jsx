@@ -1,23 +1,29 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { parsePayload } from '../utils/qrPayload.js';
 import { getCurrentLocation } from '../utils/geolocation.js';
-import { requestBlob, ApiError } from '../api/http.js';
+import { request, requestBlob, ApiError } from '../api/http.js';
+import { unwrapDocumentKey } from '../crypto/vaultKeys.js';
+import { AuthContext } from '../auth/AuthContext.jsx';
 import { QrScanner } from './QrScanner.jsx';
 
 /**
  * UnlockModal guides the receiver through context-gated document opening:
- * Step 1: Scan & strictly validate QR payload.
- * Step 2: Step-up MFA verification + on-submit high-accuracy geolocation (if geofenced).
+ * - Wrapped delivery: skips scan, fetches key-envelope, unwraps locally via browser vault key.
+ * - QR delivery: scans and parses in-person QR code payload.
+ * - Step 2: Step-up MFA verification + on-submit high-accuracy geolocation (if geofenced).
  *
  * Security requirements:
  * - documentKey lives EXCLUSIVELY in a useRef and is scrubbed immediately after request submission and on unmount.
  * - Never log or render documentKey, TOTP code, or coordinates.
+ * - If local key is missing for a wrapped document, shows explicit message and offers nothing to send the key.
  *
  * @param {{
  *   document: {
  *     id?: string,
  *     _id?: string,
  *     originalName?: string,
+ *     delivery?: 'wrapped' | 'qr',
+ *     receiver?: string | { _id?: string, id?: string },
  *     hasGeofence?: boolean,
  *     policy?: { hasGeofence?: boolean, oneTimeUse?: boolean, expiresAt?: string },
  *     oneTimeUse?: boolean
@@ -27,8 +33,16 @@ import { QrScanner } from './QrScanner.jsx';
  * }} props
  */
 export function UnlockModal({ document: doc, onSuccess, onClose }) {
-  const [step, setStep] = useState('scan'); // 'scan' | 'verify'
+  const auth = React.useContext(AuthContext);
+  const user = auth?.user || null;
+  const isWrapped = doc?.delivery === 'wrapped';
+  const targetDocId = doc?.id || doc?._id;
+  const isGeofenced = Boolean(doc?.hasGeofence || doc?.policy?.hasGeofence);
+
+  // Steps: 'loading_envelope' | 'scan' | 'verify' | 'missing_key'
+  const [step, setStep] = useState(isWrapped ? 'loading_envelope' : 'scan');
   const [scanError, setScanError] = useState(null);
+  const [missingKeyError, setMissingKeyError] = useState(null);
   const [code, setCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
@@ -36,15 +50,68 @@ export function UnlockModal({ document: doc, onSuccess, onClose }) {
   // Key is kept ONLY in a ref and never put in state, storage, or DOM
   const documentKeyRef = useRef(null);
 
-  const targetDocId = doc?.id || doc?._id;
-  const isGeofenced = Boolean(doc?.hasGeofence || doc?.policy?.hasGeofence);
-
   useEffect(() => {
     return () => {
       // Memory scrub on unmount
       documentKeyRef.current = null;
     };
   }, []);
+
+  // For wrapped documents: automatically fetch envelope and unwrap locally on mount
+  useEffect(() => {
+    if (!isWrapped) {
+      setStep('scan');
+      return;
+    }
+
+    let isMounted = true;
+
+    const unwrapEnvelope = async () => {
+      setStep('loading_envelope');
+      setMissingKeyError(null);
+
+      try {
+        const envelopeRes = await request(`/api/documents/${targetDocId}/key-envelope`);
+        if (!isMounted) return;
+
+        const envelope = envelopeRes?.envelope;
+        if (!envelope) {
+          throw new Error('This document was sent to a key that is not in this browser');
+        }
+
+        const receiverId =
+          (typeof doc?.receiver === 'object' ? doc.receiver?._id || doc.receiver?.id : doc?.receiver) ||
+          user?.id ||
+          user?._id;
+
+        const userId = user?.id || user?._id;
+
+        const unwrappedKey = await unwrapDocumentKey({
+          envelope,
+          docId: targetDocId,
+          receiverId,
+          userId
+        });
+
+        if (!isMounted) return;
+
+        documentKeyRef.current = unwrappedKey;
+        setStep('verify');
+      } catch (_) {
+        if (!isMounted) return;
+        documentKeyRef.current = null;
+        setMissingKeyError('This document was sent to a key that is not in this browser');
+        setStep('missing_key');
+      }
+    };
+
+    unwrapEnvelope();
+
+    return () => {
+      isMounted = false;
+      documentKeyRef.current = null;
+    };
+  }, [targetDocId, isWrapped, doc?.receiver, user]);
 
   const handleScanResult = (scannedText) => {
     setScanError(null);
@@ -89,8 +156,13 @@ export function UnlockModal({ document: doc, onSuccess, onClose }) {
     }
 
     if (!documentKeyRef.current) {
-      setSubmitError('Decryption key is missing. Please scan the QR code again.');
-      setStep('scan');
+      if (isWrapped) {
+        setSubmitError('This document was sent to a key that is not in this browser');
+        setStep('missing_key');
+      } else {
+        setSubmitError('Decryption key is missing. Please scan the QR code again.');
+        setStep('scan');
+      }
       return;
     }
 
@@ -179,7 +251,7 @@ export function UnlockModal({ document: doc, onSuccess, onClose }) {
           }
         } else if (status === 403) {
           if (errorCode === 'integrity') {
-            setSubmitError('Unable to open this document with this QR.');
+            setSubmitError(isWrapped ? 'Decryption key integrity check failed.' : 'Unable to open this document with this QR.');
           } else if (errorCode === 'outside_area') {
             setSubmitError('Access denied: You are outside the authorized geographic area for this document.');
           } else if (errorCode === 'location_required') {
@@ -252,7 +324,13 @@ export function UnlockModal({ document: doc, onSuccess, onClose }) {
               margin: 0
             }}
           >
-            {step === 'scan' ? 'Scan Document QR' : 'Security Verification'}
+            {step === 'scan'
+              ? 'Scan Document QR'
+              : step === 'loading_envelope'
+              ? 'Decrypting Key...'
+              : step === 'missing_key'
+              ? 'Key Unavailable'
+              : 'Security Verification'}
           </h2>
         </div>
 
@@ -260,7 +338,52 @@ export function UnlockModal({ document: doc, onSuccess, onClose }) {
           Document: <strong>{doc?.originalName || 'Confidential Document'}</strong>
         </p>
 
-        {/* STEP 1: SCAN */}
+        {/* LOADING ENVELOPE STEP */}
+        {step === 'loading_envelope' && (
+          <div style={{ padding: '2rem 1rem', textAlign: 'center', color: '#64748b' }}>
+            <div style={{ fontSize: '1.5rem', marginBottom: '0.75rem' }}>&#9203;</div>
+            <p style={{ margin: 0, fontSize: '0.9rem' }}>
+              Unwrapping document encryption key with your browser vault key...
+            </p>
+          </div>
+        )}
+
+        {/* MISSING KEY STATE FOR WRAPPED DOCUMENTS */}
+        {step === 'missing_key' && (
+          <div data-testid="missing-key-state">
+            <div
+              role="alert"
+              style={{
+                padding: '1rem',
+                backgroundColor: '#fff1f2',
+                border: '1px solid #fecdd3',
+                borderRadius: '8px',
+                color: '#9f1239',
+                fontSize: '0.9rem',
+                lineHeight: 1.5,
+                marginBottom: '1.5rem'
+              }}
+            >
+              <strong>{missingKeyError || 'This document was sent to a key that is not in this browser'}</strong>
+              <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.825rem', color: '#be123c' }}>
+                This document was encrypted for a browser vault key that is not stored on this device. For security, documents cannot be unlocked from an unverified browser.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={handleModalClose}
+                className="btn btn-secondary"
+                style={{ width: 'auto', padding: '0.5rem 1.25rem', fontSize: '0.85rem' }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 1: SCAN (QR mode only) */}
         {step === 'scan' && (
           <div>
             {scanError && (
@@ -370,17 +493,19 @@ export function UnlockModal({ document: doc, onSuccess, onClose }) {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.5rem' }}>
-              <button
-                type="button"
-                onClick={handleBackToScan}
-                disabled={submitting}
-                className="btn btn-secondary"
-                style={{ width: 'auto', padding: '0.5rem 1rem', fontSize: '0.85rem' }}
-              >
-                Scan Again
-              </button>
+              {!isWrapped && (
+                <button
+                  type="button"
+                  onClick={handleBackToScan}
+                  disabled={submitting}
+                  className="btn btn-secondary"
+                  style={{ width: 'auto', padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                >
+                  Scan Again
+                </button>
+              )}
 
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', gap: '0.5rem', marginLeft: isWrapped ? 'auto' : undefined }}>
                 <button
                   type="button"
                   onClick={handleModalClose}
