@@ -651,7 +651,7 @@ export function UploadForm({ onSuccess }) {
       <button
         type="submit"
         disabled={isSubmitDisabled}
-        className="btn btn-primary"
+        className="btn btn-primary btn-3d-primary"
         style={{
           width: '100%',
           padding: '0.75rem 1rem',

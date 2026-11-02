@@ -344,14 +344,15 @@ export function UnlockModal({ document: doc, hasVaultKey, onSuccess, onClose }) 
       role="dialog"
       aria-modal="true"
       aria-labelledby="unlock-modal-title"
+      className="perspective-1000"
       style={{
         position: 'fixed',
         top: 0,
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(15, 23, 42, 0.75)',
-        backdropFilter: 'blur(4px)',
+        backgroundColor: 'rgba(5, 10, 20, 0.85)',
+        backdropFilter: 'blur(6px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -360,16 +361,21 @@ export function UnlockModal({ document: doc, hasVaultKey, onSuccess, onClose }) 
       }}
     >
       <div
+        className="preserve-3d"
         style={{
-          backgroundColor: '#ffffff',
-          borderRadius: '12px',
-          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1)',
+          position: 'relative',
+          backgroundColor: '#0c162c',
+          color: '#f1f5f9',
+          borderRadius: '14px',
+          border: '1px solid rgba(56, 189, 248, 0.4)',
+          boxShadow: '0 25px 60px -10px rgba(0, 0, 0, 0.85), 0 0 25px rgba(56, 189, 248, 0.25)',
           maxWidth: '520px',
           maxHeight: '90vh',
           overflowY: 'auto',
           width: '100%',
           padding: '2rem',
-          boxSizing: 'border-box'
+          boxSizing: 'border-box',
+          transform: 'translateZ(20px)'
         }}
       >
         {/* Header */}
@@ -380,7 +386,8 @@ export function UnlockModal({ document: doc, hasVaultKey, onSuccess, onClose }) 
             style={{
               fontSize: '1.35rem',
               fontWeight: 700,
-              color: '#0f172a',
+              color: '#f8fafc',
+              textShadow: '0 0 12px rgba(56, 189, 248, 0.4)',
               margin: 0
             }}
           >
@@ -394,8 +401,8 @@ export function UnlockModal({ document: doc, hasVaultKey, onSuccess, onClose }) 
           </h2>
         </div>
 
-        <p style={{ fontSize: '0.875rem', color: '#475569', margin: '0 0 1.25rem 0' }}>
-          Document: <strong>{doc?.originalName || 'Confidential Document'}</strong>
+        <p style={{ fontSize: '0.875rem', color: '#94a3b8', margin: '0 0 1.25rem 0' }}>
+          Document: <strong style={{ color: '#38bdf8' }}>{doc?.originalName || 'Confidential Document'}</strong>
         </p>
 
         {/* LOADING ENVELOPE STEP */}
@@ -483,7 +490,10 @@ export function UnlockModal({ document: doc, hasVaultKey, onSuccess, onClose }) 
               </div>
             )}
 
-            <QrScanner onResult={handleScanResult} onCancel={handleModalClose} />
+            <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '8px' }}>
+              <div className="hologram-scanline" />
+              <QrScanner onResult={handleScanResult} onCancel={handleModalClose} />
+            </div>
           </div>
         )}
 
@@ -537,7 +547,7 @@ export function UnlockModal({ document: doc, hasVaultKey, onSuccess, onClose }) 
                   display: 'block',
                   fontSize: '0.85rem',
                   fontWeight: 600,
-                  color: '#334155',
+                  color: '#cbd5e1',
                   marginBottom: '0.4rem'
                 }}
               >
@@ -545,6 +555,7 @@ export function UnlockModal({ document: doc, hasVaultKey, onSuccess, onClose }) 
               </label>
               <input
                 id="totp-code-input"
+                className="input-3d-well"
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"
@@ -561,7 +572,6 @@ export function UnlockModal({ document: doc, hasVaultKey, onSuccess, onClose }) 
                   letterSpacing: '0.3em',
                   textAlign: 'center',
                   fontFamily: 'monospace',
-                  border: '1px solid #cbd5e1',
                   borderRadius: '6px',
                   boxSizing: 'border-box'
                 }}
@@ -597,7 +607,7 @@ export function UnlockModal({ document: doc, hasVaultKey, onSuccess, onClose }) 
                 <button
                   type="submit"
                   disabled={submitting || code.length !== 6}
-                  className="btn btn-primary"
+                  className="btn btn-primary btn-3d-primary"
                   style={{
                     width: 'auto',
                     padding: '0.5rem 1.25rem',

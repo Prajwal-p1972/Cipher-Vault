@@ -63,14 +63,15 @@ export function KeyRevealModal({ documentKey: initialKey, document, documentId, 
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"
+      className="perspective-1000"
       style={{
         position: 'fixed',
         top: 0,
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(15, 23, 42, 0.75)',
-        backdropFilter: 'blur(4px)',
+        backgroundColor: 'rgba(5, 10, 20, 0.85)',
+        backdropFilter: 'blur(6px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -220,7 +221,7 @@ export function KeyRevealModal({ documentKey: initialKey, document, documentId, 
             type="button"
             onClick={handleClose}
             disabled={!confirmedSaved}
-            className="btn btn-primary"
+            className="btn btn-primary btn-3d-primary"
             style={{
               width: 'auto',
               padding: '0.6rem 1.25rem',

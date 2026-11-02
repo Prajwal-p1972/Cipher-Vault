@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { ApiError } from '../api/http.js';
+import CyberVaultCanvas3D from '../components/ui3d/CyberVaultCanvas3D.jsx';
+import TiltCard3D from '../components/ui3d/TiltCard3D.jsx';
+import HologramEmblem3D from '../components/ui3d/HologramEmblem3D.jsx';
 
 export function Login() {
   const {
@@ -162,59 +165,67 @@ export function Login() {
   // Step 2: MFA Enrollment
   if (status === 'needsMfaSetup') {
     return (
-      <div className="auth-container">
-        <div className="auth-header">
-          <h1>Configure Two-Factor Authentication</h1>
-          <p>Scan the QR code with your authenticator app (Google Authenticator, Authy, etc.)</p>
-        </div>
-
-        {errorMessage && (
-          <div className="alert alert-danger" role="alert">
-            {errorMessage}
+      <div className="auth-3d-scene perspective-1000">
+        <CyberVaultCanvas3D opacity={0.65} />
+        <TiltCard3D variant="cyan" className="auth-container">
+          <HologramEmblem3D size="md" />
+          <div className="auth-header">
+            <h1>Configure Two-Factor Authentication</h1>
+            <p>Scan the QR code with your authenticator app (Google Authenticator, Authy, etc.)</p>
           </div>
-        )}
 
-        {setupLoading ? (
-          <div style={{ textAlign: 'center', padding: '2rem' }}>
-            <div className="spinner" />
-            <p style={{ marginTop: '0.5rem', color: 'var(--text-muted)' }}>
-              Generating cryptographic TOTP key...
-            </p>
-          </div>
-        ) : (
-          <>
-            {qrDataUrl && (
-              <div className="qr-box">
-                <img src={qrDataUrl} alt="TOTP QR Code" />
-                <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  Manual key entry:
+          {errorMessage && (
+            <div className="alert alert-danger" role="alert">
+              {errorMessage}
+            </div>
+          )}
+
+          {setupLoading ? (
+            <div style={{ textAlign: 'center', padding: '2rem' }}>
+              <div className="spinner" />
+              <p style={{ marginTop: '0.5rem', color: 'var(--text-muted)' }}>
+                Generating cryptographic TOTP key...
+              </p>
+            </div>
+          ) : (
+            <>
+              {qrDataUrl && (
+                <div className="hologram-scanner-cradle" style={{ marginBottom: '1.25rem' }}>
+                  <div className="hologram-scanline" />
+                  <div className="qr-box" style={{ margin: 0 }}>
+                    <img src={qrDataUrl} alt="TOTP QR Code" />
+                    <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                      Manual key entry:
+                    </div>
+                    <div className="manual-key-display">{manualEntryKey}</div>
+                  </div>
                 </div>
-                <div className="manual-key-display">{manualEntryKey}</div>
-              </div>
-            )}
+              )}
 
-            <form onSubmit={handleMfaSetupSubmit} noValidate>
-              <div className="form-group">
-                <label htmlFor="totpSetupCode">6-Digit Verification Code</label>
-                <input
-                  id="totpSetupCode"
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  placeholder="000000"
-                  required
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-                />
-              </div>
+              <form onSubmit={handleMfaSetupSubmit} noValidate>
+                <div className="form-group">
+                  <label htmlFor="totpSetupCode">6-Digit Verification Code</label>
+                  <input
+                    id="totpSetupCode"
+                    className="input-3d-well"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    placeholder="000000"
+                    required
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                  />
+                </div>
 
-              <button type="submit" className="btn" disabled={loading}>
-                {loading ? 'Verifying...' : 'Enable Two-Factor Authentication'}
-              </button>
-            </form>
-          </>
-        )}
+                <button type="submit" className="btn btn-3d-primary" disabled={loading}>
+                  {loading ? 'Verifying...' : 'Enable Two-Factor Authentication'}
+                </button>
+              </form>
+            </>
+          )}
+        </TiltCard3D>
       </div>
     );
   }
@@ -222,11 +233,64 @@ export function Login() {
   // Step 3: MFA Verification
   if (status === 'needsMfaCode') {
     return (
-      <div className="auth-container">
+      <div className="auth-3d-scene perspective-1000">
+        <CyberVaultCanvas3D opacity={0.65} />
+        <TiltCard3D variant="cyan" className="auth-container">
+          <HologramEmblem3D size="md" />
+          <div className="auth-header">
+            <h1>Two-Factor Verification</h1>
+            <p>Enter the 6-digit code from your authenticator application</p>
+          </div>
+
+          {errorMessage && (
+            <div className="alert alert-danger" role="alert">
+              {errorMessage}
+            </div>
+          )}
+
+          <form onSubmit={handleMfaVerifySubmit} noValidate>
+            <div className="form-group">
+              <label htmlFor="totpCode">Authentication Code</label>
+              <input
+                id="totpCode"
+                className="input-3d-well"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                placeholder="000000"
+                required
+                autoFocus
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+              />
+            </div>
+
+            <button type="submit" className="btn btn-3d-primary" disabled={loading}>
+              {loading ? 'Verifying...' : 'Verify & Access Vault'}
+            </button>
+          </form>
+        </TiltCard3D>
+      </div>
+    );
+  }
+
+  // Step 1: Credentials
+  return (
+    <div className="auth-3d-scene perspective-1000">
+      <CyberVaultCanvas3D opacity={0.65} />
+      <TiltCard3D variant="cyan" className="auth-container">
+        <HologramEmblem3D size="md" />
         <div className="auth-header">
-          <h1>Two-Factor Verification</h1>
-          <p>Enter the 6-digit code from your authenticator application</p>
+          <h1>Sign In to Cipher Vault</h1>
+          <p>Zero-cloud secure document exchange</p>
         </div>
+
+        {successMessage && (
+          <div className="alert alert-success" role="status">
+            {successMessage}
+          </div>
+        )}
 
         {errorMessage && (
           <div className="alert alert-danger" role="alert">
@@ -234,84 +298,42 @@ export function Login() {
           </div>
         )}
 
-        <form onSubmit={handleMfaVerifySubmit} noValidate>
+        <form onSubmit={handleCredentialsSubmit} noValidate>
           <div className="form-group">
-            <label htmlFor="totpCode">Authentication Code</label>
+            <label htmlFor="email">Email Address</label>
             <input
-              id="totpCode"
-              type="text"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              maxLength={6}
-              placeholder="000000"
+              id="email"
+              className="input-3d-well"
+              type="email"
               required
-              autoFocus
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
             />
           </div>
 
-          <button type="submit" className="btn" disabled={loading}>
-            {loading ? 'Verifying...' : 'Verify & Access Vault'}
+          <div className="form-group">
+            <label htmlFor="password">Master Password</label>
+            <input
+              id="password"
+              className="input-3d-well"
+              type="password"
+              required
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+
+          <button type="submit" className="btn btn-3d-primary" disabled={loading}>
+            {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
-      </div>
-    );
-  }
 
-  // Step 1: Credentials
-  return (
-    <div className="auth-container">
-      <div className="auth-header">
-        <h1>Sign In to Cipher Vault</h1>
-        <p>Zero-cloud secure document exchange</p>
-      </div>
-
-      {successMessage && (
-        <div className="alert alert-success" role="status">
-          {successMessage}
+        <div className="auth-footer">
+          Don't have an account? <Link to="/register">Create one</Link>
         </div>
-      )}
-
-      {errorMessage && (
-        <div className="alert alert-danger" role="alert">
-          {errorMessage}
-        </div>
-      )}
-
-      <form onSubmit={handleCredentialsSubmit} noValidate>
-        <div className="form-group">
-          <label htmlFor="email">Email Address</label>
-          <input
-            id="email"
-            type="email"
-            required
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </div>
-
-        <div className="form-group">
-          <label htmlFor="password">Master Password</label>
-          <input
-            id="password"
-            type="password"
-            required
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </div>
-
-        <button type="submit" className="btn" disabled={loading}>
-          {loading ? 'Signing in...' : 'Sign In'}
-        </button>
-      </form>
-
-      <div className="auth-footer">
-        Don't have an account? <Link to="/register">Create one</Link>
-      </div>
+      </TiltCard3D>
     </div>
   );
 }

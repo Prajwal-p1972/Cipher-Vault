@@ -182,6 +182,7 @@ export function VaultKeySetup({ onClose, onSuccess }) {
                 setLocalError(null);
               }}
               disabled={submitting}
+              className="input-3d-well"
               style={{
                 width: '100%',
                 padding: '0.65rem 0.75rem',
@@ -189,7 +190,6 @@ export function VaultKeySetup({ onClose, onSuccess }) {
                 letterSpacing: '0.2em',
                 textAlign: 'center',
                 fontFamily: 'ui-monospace, monospace',
-                border: '1px solid #cbd5e1',
                 borderRadius: '6px',
                 boxSizing: 'border-box'
               }}
@@ -219,17 +219,15 @@ export function VaultKeySetup({ onClose, onSuccess }) {
           <button
             type="submit"
             disabled={submitting || code.length !== 6}
+            className="btn btn-3d-primary"
             style={{
               width: '100%',
               padding: '0.75rem',
               fontSize: '0.9rem',
               fontWeight: 600,
-              backgroundColor: submitting || code.length !== 6 ? '#94a3b8' : '#2563eb',
               color: '#ffffff',
-              border: 'none',
               borderRadius: '6px',
-              cursor: submitting || code.length !== 6 ? 'not-allowed' : 'pointer',
-              transition: 'background-color 0.15s ease'
+              cursor: submitting || code.length !== 6 ? 'not-allowed' : 'pointer'
             }}
           >
             {submitting ? 'Registering Key...' : isMismatch ? 'Rotate & Register Key for this Device' : 'Generate & Register Vault Key'}

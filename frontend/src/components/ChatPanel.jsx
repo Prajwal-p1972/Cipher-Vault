@@ -49,15 +49,17 @@ export function ChatPanel({ session }) {
     <div
       role="region"
       aria-label="Local Document Chat"
+      className="preserve-3d"
       style={{
         marginTop: '1.25rem',
-        backgroundColor: '#0f172a',
-        border: '1px solid #334155',
-        borderRadius: '8px',
-        padding: '1rem',
+        backgroundColor: '#0a0f1d',
+        border: '1px solid rgba(168, 85, 247, 0.4)',
+        boxShadow: '0 12px 30px -5px rgba(0, 0, 0, 0.8), 0 0 16px rgba(168, 85, 247, 0.2)',
+        borderRadius: '12px',
+        padding: '1.25rem',
         display: 'flex',
         flexDirection: 'column',
-        gap: '0.75rem',
+        gap: '0.85rem',
         color: '#f8fafc'
       }}
     >
@@ -104,14 +106,8 @@ export function ChatPanel({ session }) {
           onClick={() => ask('Summarize document', 'summary')}
           disabled={isStreaming || !session}
           aria-label="Summarize document"
+          className="quick-action-3d-chip"
           style={{
-            background: '#1e293b',
-            border: '1px solid #3b82f6',
-            borderRadius: '4px',
-            color: '#60a5fa',
-            fontSize: '0.75rem',
-            fontWeight: 500,
-            padding: '0.3rem 0.65rem',
             cursor: isStreaming || !session ? 'not-allowed' : 'pointer',
             opacity: isStreaming || !session ? 0.5 : 1
           }}
@@ -123,14 +119,8 @@ export function ChatPanel({ session }) {
           onClick={() => ask('Detailed summary of document', 'detailed')}
           disabled={isStreaming || !session}
           aria-label="Detailed summary"
+          className="quick-action-3d-chip"
           style={{
-            background: '#1e293b',
-            border: '1px solid #8b5cf6',
-            borderRadius: '4px',
-            color: '#c084fc',
-            fontSize: '0.75rem',
-            fontWeight: 500,
-            padding: '0.3rem 0.65rem',
             cursor: isStreaming || !session ? 'not-allowed' : 'pointer',
             opacity: isStreaming || !session ? 0.5 : 1
           }}
@@ -200,16 +190,16 @@ export function ChatPanel({ session }) {
 
               {/* Strict Plain-Text Render Container */}
               <div
+                className={m.role === 'user' ? 'chat-bubble-3d-user' : 'chat-bubble-3d-ai'}
                 style={{
                   padding: '0.65rem 0.85rem',
-                  borderRadius: '6px',
+                  borderRadius: '8px',
                   fontSize: '0.85rem',
                   lineHeight: 1.5,
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-word',
-                  backgroundColor: m.role === 'user' ? '#0369a1' : '#1e293b',
                   color: '#f8fafc',
-                  border: m.error ? '1px solid #ef4444' : '1px solid #334155'
+                  border: m.error ? '1px solid #ef4444' : undefined
                 }}
               >
                 {m.text}
@@ -331,13 +321,11 @@ export function ChatPanel({ session }) {
           rows={2}
           maxLength={1000}
           aria-label="Question"
+          className="input-3d-well"
           style={{
             flex: 1,
-            backgroundColor: '#1e293b',
-            border: '1px solid #334155',
-            borderRadius: '6px',
-            color: '#f8fafc',
-            padding: '0.5rem 0.75rem',
+            borderRadius: '8px',
+            padding: '0.6rem 0.85rem',
             fontSize: '0.85rem',
             resize: 'none',
             outline: 'none',
@@ -350,12 +338,9 @@ export function ChatPanel({ session }) {
             type="button"
             onClick={stop}
             aria-label="Stop generation"
+            className="btn-3d-danger"
             style={{
-              padding: '0.5rem 1rem',
-              backgroundColor: '#ef4444',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: '6px',
+              padding: '0.5rem 1.15rem',
               fontWeight: 600,
               fontSize: '0.85rem',
               cursor: 'pointer',
@@ -370,12 +355,9 @@ export function ChatPanel({ session }) {
             onClick={handleSend}
             disabled={!input.trim()}
             aria-label="Send question"
+            className="btn-3d-cyber"
             style={{
-              padding: '0.5rem 1.1rem',
-              backgroundColor: '#0284c7',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: '6px',
+              padding: '0.5rem 1.25rem',
               fontWeight: 600,
               fontSize: '0.85rem',
               cursor: !input.trim() ? 'not-allowed' : 'pointer',

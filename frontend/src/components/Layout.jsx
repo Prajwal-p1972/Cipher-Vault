@@ -180,7 +180,7 @@ export function Layout({
             <button
               type="button"
               onClick={handleLogout}
-              className="btn btn-secondary"
+              className="btn btn-secondary btn-3d-cyber"
               style={{
                 padding: '0.45rem 0.9rem',
                 fontSize: '0.85rem',

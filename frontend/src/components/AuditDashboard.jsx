@@ -112,53 +112,54 @@ export function AuditDashboard() {
   };
 
   return (
-    <div className="bg-gray-800 p-6 rounded-lg shadow border border-gray-700 mt-8">
-      <h2 className="text-xl font-bold text-white mb-6">Security &amp; Audit Analytics</h2>
+    <div className="audit-pod-3d preserve-3d mt-8" style={{ marginTop: '2rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.5rem' }}>
+        <span style={{ fontSize: '1.25rem' }}>&#128737;</span>
+        <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#f8fafc', margin: 0, textShadow: '0 0 12px rgba(56, 189, 248, 0.4)' }}>
+          Security &amp; Audit Analytics
+        </h2>
+      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-        <div className="bg-gray-900 p-4 rounded-lg flex flex-col items-center">
-          <h3 className="text-gray-400 mb-2 font-semibold">Security Outcomes</h3>
-          <div className="w-48 h-48">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
+        <div style={{ background: 'rgba(10, 16, 30, 0.85)', padding: '1.25rem', borderRadius: '10px', border: '1px solid rgba(56, 189, 248, 0.25)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <h3 style={{ color: '#94a3b8', marginBottom: '0.75rem', fontWeight: 600, fontSize: '0.9rem' }}>Security Outcomes</h3>
+          <div style={{ width: '190px', height: '190px' }}>
             <Doughnut data={doughnutData} options={doughnutOptions} />
           </div>
         </div>
-        <div className="bg-gray-900 p-4 rounded-lg flex flex-col">
-          <h3 className="text-gray-400 mb-2 font-semibold">Event Distribution</h3>
-          <div className="h-48">
+        <div style={{ background: 'rgba(10, 16, 30, 0.85)', padding: '1.25rem', borderRadius: '10px', border: '1px solid rgba(168, 85, 247, 0.25)', display: 'flex', flexDirection: 'column' }}>
+          <h3 style={{ color: '#94a3b8', marginBottom: '0.75rem', fontWeight: 600, fontSize: '0.9rem' }}>Event Distribution</h3>
+          <div style={{ height: '190px' }}>
             <Bar data={barData} options={chartOptions} />
           </div>
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm text-left text-gray-400">
-          <thead className="text-xs text-gray-300 uppercase bg-gray-700">
+      <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
+        <table style={{ width: '100%', fontSize: '0.85rem', textAlign: 'left', color: '#cbd5e1', borderCollapse: 'collapse' }}>
+          <thead style={{ fontSize: '0.75rem', textTransform: 'uppercase', background: 'rgba(15, 23, 42, 0.95)', color: '#94a3b8' }}>
             <tr>
-              <th className="px-4 py-3">Timestamp</th>
-              <th className="px-4 py-3">Action</th>
-              <th className="px-4 py-3">Document</th>
-              <th className="px-4 py-3">Outcome</th>
-              <th className="px-4 py-3">IP Address</th>
+              <th style={{ padding: '0.75rem 1rem' }}>Timestamp</th>
+              <th style={{ padding: '0.75rem 1rem' }}>Action</th>
+              <th style={{ padding: '0.75rem 1rem' }}>Document</th>
+              <th style={{ padding: '0.75rem 1rem' }}>Outcome</th>
+              <th style={{ padding: '0.75rem 1rem' }}>IP Address</th>
             </tr>
           </thead>
           <tbody>
             {logs.slice(0, 10).map((log, index) => (
-              <tr key={log.seq || log._id || index} className="border-b border-gray-700 hover:bg-gray-600">
-                <td className="px-4 py-3">{new Date(log.createdAt).toLocaleString()}</td>
-                <td className="px-4 py-3 font-mono text-xs">{log.action}</td>
-                <td className="px-4 py-3 text-blue-400">{log.documentName || 'Unknown Document'}</td>
-                <td className="px-4 py-3">
+              <tr key={log.seq || log._id || index} style={{ borderBottom: '1px solid rgba(30, 41, 59, 0.8)', background: index % 2 === 0 ? 'rgba(15, 23, 42, 0.4)' : 'transparent' }}>
+                <td style={{ padding: '0.75rem 1rem' }}>{new Date(log.createdAt).toLocaleString()}</td>
+                <td style={{ padding: '0.75rem 1rem', fontFamily: 'monospace', fontSize: '0.8rem', color: '#38bdf8' }}>{log.action}</td>
+                <td style={{ padding: '0.75rem 1rem', color: '#60a5fa' }}>{log.documentName || 'Unknown Document'}</td>
+                <td style={{ padding: '0.75rem 1rem' }}>
                   <span
-                    className={`px-2 py-1 rounded text-xs font-bold ${
-                      log.outcome === 'success'
-                        ? 'bg-green-900 text-green-300'
-                        : 'bg-red-900 text-red-300'
-                    }`}
+                    className={log.outcome === 'success' ? 'badge-3d-emerald' : 'badge-3d-crimson'}
                   >
                     {String(log.outcome || '').toUpperCase()}
                   </span>
                 </td>
-                <td className="px-4 py-3 font-mono text-xs">{log.ip || '-'}</td>
+                <td style={{ padding: '0.75rem 1rem', fontFamily: 'monospace', fontSize: '0.8rem' }}>{log.ip || '-'}</td>
               </tr>
             ))}
           </tbody>

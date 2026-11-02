@@ -10,6 +10,8 @@ import { DocumentViewer } from '../components/DocumentViewer.jsx';
 import { AuditDashboard } from '../components/AuditDashboard.jsx';
 import { useVaultKey } from '../hooks/useVaultKey.js';
 import { VaultKeySetup } from '../components/VaultKeySetup.jsx';
+import CyberVaultCanvas3D from '../components/ui3d/CyberVaultCanvas3D.jsx';
+import TiltCard3D from '../components/ui3d/TiltCard3D.jsx';
 
 /**
  * Main application dashboard featuring Received / Sent / New Upload views,
@@ -114,7 +116,8 @@ export function Dashboard() {
       unreadCount={unreadCount}
       onMarkAllAsRead={markAllAsRead}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <CyberVaultCanvas3D opacity={0.18} speed={0.5} />
         {/* Navigation Tabs */}
         <div
           role="tablist"
@@ -377,27 +380,24 @@ export function Dashboard() {
             )}
 
             {activeTab === 'upload' && (
-              <div
+              <TiltCard3D
+                variant="cyan"
                 style={{
                   maxWidth: '680px',
                   margin: '0 auto',
-                  backgroundColor: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '12px',
-                  padding: '2rem',
-                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
+                  padding: '2rem'
                 }}
               >
                 <div style={{ marginBottom: '1.5rem' }}>
-                  <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0 0 0.4rem 0', color: '#0f172a' }}>
+                  <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0 0 0.4rem 0', color: '#f8fafc', textShadow: '0 0 12px rgba(56, 189, 248, 0.4)' }}>
                     Seal &amp; Send Document
                   </h2>
-                  <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>
+                  <p style={{ margin: 0, fontSize: '0.875rem', color: '#94a3b8' }}>
                     Documents are encrypted with AES-256-GCM. The encryption key is displayed only once to you and is never stored on the server.
                   </p>
                 </div>
                 <UploadForm onSuccess={handleUploadSuccess} />
-              </div>
+              </TiltCard3D>
             )}
           </div>
         )}

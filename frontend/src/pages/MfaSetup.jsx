@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { ApiError } from '../api/http.js';
+import CyberVaultCanvas3D from '../components/ui3d/CyberVaultCanvas3D.jsx';
+import TiltCard3D from '../components/ui3d/TiltCard3D.jsx';
+import HologramEmblem3D from '../components/ui3d/HologramEmblem3D.jsx';
 
 export function MfaSetup() {
   const { status, setupToken, startSetup, confirmSetup } = useAuth();
@@ -21,7 +24,6 @@ export function MfaSetup() {
   }
 
   // If the state machine is not in the MFA setup state, redirect to login
-  // (e.g. user navigated here directly without credentials)
   if (status !== 'booting' && status !== 'needsMfaSetup') {
     return <Navigate to="/login" replace />;
   }
@@ -63,7 +65,6 @@ export function MfaSetup() {
     setSubmitLoading(true);
     try {
       await confirmSetup(clean);
-      // confirmSetup transitions status → 'authed'; Navigate above handles redirect
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.status === 401) {
@@ -84,8 +85,10 @@ export function MfaSetup() {
   };
 
   return (
-    <div className="mfa-setup-page">
-      <div className="auth-container">
+    <div className="mfa-setup-page auth-3d-scene perspective-1000">
+      <CyberVaultCanvas3D opacity={0.65} />
+      <TiltCard3D variant="cyan" className="auth-container">
+        <HologramEmblem3D size="md" />
         <div className="auth-header">
           <h1>Configure Two-Factor Authentication</h1>
           <p>
@@ -111,18 +114,21 @@ export function MfaSetup() {
         ) : (
           <>
             {qrDataUrl && (
-              <div className="qr-box">
-                <img src={qrDataUrl} alt="TOTP QR Code — scan with your authenticator app" />
-                <div
-                  style={{
-                    marginTop: '0.75rem',
-                    fontSize: '0.75rem',
-                    color: 'var(--text-muted)'
-                  }}
-                >
-                  Manual entry key:
+              <div className="hologram-scanner-cradle" style={{ marginBottom: '1.25rem' }}>
+                <div className="hologram-scanline" />
+                <div className="qr-box" style={{ margin: 0 }}>
+                  <img src={qrDataUrl} alt="TOTP QR Code — scan with your authenticator app" />
+                  <div
+                    style={{
+                      marginTop: '0.75rem',
+                      fontSize: '0.75rem',
+                      color: 'var(--text-muted)'
+                    }}
+                  >
+                    Manual entry key:
+                  </div>
+                  <div className="manual-key-display">{manualEntryKey}</div>
                 </div>
-                <div className="manual-key-display">{manualEntryKey}</div>
               </div>
             )}
 
@@ -131,6 +137,7 @@ export function MfaSetup() {
                 <label htmlFor="mfaSetupCode">6-Digit Verification Code</label>
                 <input
                   id="mfaSetupCode"
+                  className="input-3d-well"
                   type="text"
                   inputMode="numeric"
                   autoComplete="one-time-code"
@@ -145,7 +152,7 @@ export function MfaSetup() {
 
               <button
                 type="submit"
-                className="btn"
+                className="btn btn-3d-primary"
                 disabled={submitLoading || fetchLoading}
               >
                 {submitLoading
@@ -172,7 +179,7 @@ export function MfaSetup() {
             </div>
           </>
         )}
-      </div>
+      </TiltCard3D>
     </div>
   );
 }
