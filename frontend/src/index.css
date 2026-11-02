@@ -1,8 +1,42 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 @import './styles.css';
 
 /* ==========================================================================
-   Cipher Vault - Military-Grade 3D Interactive Cyber-Security Engine
+   Cipher Vault - Military-Grade Obsidian & Cyber-Titanium 3D Engine
    ========================================================================== */
+
+:root {
+  --font-sans: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  --text-primary: #F8FAFC;
+  --text-secondary: #CBD5E1;
+  --text-muted: #94A3B8;
+
+  --accent-cyan: #00F0FF;
+  --accent-emerald: #10B981;
+  --accent-violet: #8B5CF6;
+  --accent-crimson: #F43F5E;
+
+  --bg-obsidian: #030712;
+  --surface-obsidian: rgba(15, 23, 42, 0.85);
+  --border-cyber: rgba(56, 189, 248, 0.25);
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-obsidian);
+  color: var(--text-primary);
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code, pre, .font-mono, [data-font="mono"] {
+  font-family: var(--font-mono) !important;
+}
 
 /* --------------------------------------------------------------------------
    3D Perspective & Depth Utilities
@@ -511,4 +545,399 @@
   color: #f87171;
   border: 1px solid rgba(239, 68, 68, 0.4);
   box-shadow: 0 2px 6px rgba(239, 68, 68, 0.25);
+}
+
+/* --------------------------------------------------------------------------
+   Password Visibility Toggle ("See Password" Eye Button)
+   -------------------------------------------------------------------------- */
+.password-toggle-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.password-toggle-wrapper input {
+  width: 100%;
+  padding-right: 2.85rem !important;
+}
+
+.password-eye-btn {
+  position: absolute;
+  right: 0.65rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 6px;
+  color: #94a3b8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 2;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.password-eye-btn:hover {
+  color: #00f0ff;
+  border-color: #00f0ff;
+  background: rgba(15, 23, 42, 0.9);
+  transform: translateY(-50%) scale(1.08);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.35);
+}
+
+.password-eye-btn:active {
+  transform: translateY(-50%) scale(0.96);
+}
+
+/* --------------------------------------------------------------------------
+   3D Vault Showcase (Login Landing Two-Column Layout)
+   -------------------------------------------------------------------------- */
+.login-split-layout {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  gap: 2.5rem;
+  z-index: 1;
+}
+
+@media (max-width: 960px) {
+  .login-split-layout {
+    flex-direction: column-reverse;
+    gap: 2rem;
+  }
+}
+
+.vault-showcase-container {
+  flex: 1;
+  max-width: 580px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.pillar-pill-3d {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(6, 11, 22, 0.9) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 10px;
+  padding: 0.85rem 1.15rem;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  box-shadow: 0 8px 20px -5px rgba(0, 0, 0, 0.7), inset 0 1px 1px rgba(255, 255, 255, 0.12);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.pillar-pill-3d:hover {
+  transform: translateY(-2px) translateZ(8px);
+  border-color: rgba(0, 240, 255, 0.5);
+  box-shadow: 0 12px 25px -5px rgba(0, 0, 0, 0.8), 0 0 15px rgba(0, 240, 255, 0.2);
+}
+
+/* --------------------------------------------------------------------------
+   3D Vault Door Opening Transition Sequence
+   -------------------------------------------------------------------------- */
+@keyframes vaultDoorSlideLeft {
+  0% {
+    transform: perspective(1200px) rotateY(0deg) translateX(0%);
+    opacity: 1;
+  }
+  60% {
+    transform: perspective(1200px) rotateY(12deg) translateX(-45%);
+    opacity: 0.95;
+  }
+  100% {
+    transform: perspective(1200px) rotateY(25deg) translateX(-110%);
+    opacity: 0;
+  }
+}
+
+@keyframes vaultDoorSlideRight {
+  0% {
+    transform: perspective(1200px) rotateY(0deg) translateX(0%);
+    opacity: 1;
+  }
+  60% {
+    transform: perspective(1200px) rotateY(-12deg) translateX(45%);
+    opacity: 0.95;
+  }
+  100% {
+    transform: perspective(1200px) rotateY(-25deg) translateX(110%);
+    opacity: 0;
+  }
+}
+
+@keyframes vaultWheelSpin {
+  0% {
+    transform: translate(-50%, -50%) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: translate(-50%, -50%) rotate(360deg) scale(1.08);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(720deg) scale(0.7);
+    opacity: 0;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Zero-Trust Security Posture HUD Strip
+   -------------------------------------------------------------------------- */
+.hud-telemetry-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(90deg, rgba(13, 22, 41, 0.92) 0%, rgba(6, 11, 22, 0.96) 100%);
+  border-bottom: 1px solid rgba(56, 189, 248, 0.25);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  padding: 0.5rem 1.5rem;
+  font-size: 0.78rem;
+  color: #cbd5e1;
+  overflow-x: auto;
+  gap: 1rem;
+}
+
+.hud-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.25rem 0.65rem;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 9999px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.hud-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-shadow: 0 0 6px currentColor;
+}
+
+/* --------------------------------------------------------------------------
+   3D Cryptographic Pipeline Stepper
+   -------------------------------------------------------------------------- */
+.pipeline-stepper-3d {
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.88) 0%, rgba(6, 11, 22, 0.94) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 12px;
+  padding: 1rem 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+}
+
+.pipeline-steps-track {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  overflow-x: auto;
+  gap: 0.75rem;
+}
+
+.pipeline-node-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.35rem;
+  flex: 1;
+  min-width: 110px;
+}
+
+.pipeline-node-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.82rem;
+  background: #0f172a;
+  border: 1.5px solid #00f0ff;
+  color: #00f0ff;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
+}
+
+/* --------------------------------------------------------------------------
+   High-Contrast High-Security Badges
+   -------------------------------------------------------------------------- */
+.badge-3d-sealed {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  border-radius: 4px;
+  background: rgba(0, 240, 255, 0.12);
+  color: #00f0ff;
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.2);
+}
+
+.badge-3d-consumed {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  border-radius: 4px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.2);
+}
+
+.badge-3d-expired {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  border-radius: 4px;
+  background: rgba(244, 63, 94, 0.12);
+  color: #f43f5e;
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  box-shadow: 0 0 8px rgba(244, 63, 94, 0.2);
+}
+
+/* --------------------------------------------------------------------------
+   Document Viewer 3D Studio & Neural Chatbot
+   -------------------------------------------------------------------------- */
+.ram-security-banner-3d {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.15) 0%, rgba(6, 11, 22, 0.95) 50%, rgba(0, 240, 255, 0.15) 100%);
+  border-bottom: 1px solid rgba(16, 185, 129, 0.35);
+  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.15);
+  padding: 0.6rem 1.5rem;
+  font-size: 0.8rem;
+  color: #a7f3d0;
+  text-align: center;
+}
+
+.volatile-ram-pulse {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+  animation: cyberPulse 2s infinite ease-in-out;
+}
+
+.citation-pill-3d {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.45rem;
+  margin: 0 0.2rem;
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  border-radius: 4px;
+  background: rgba(139, 92, 246, 0.2);
+  border: 1px solid rgba(139, 92, 246, 0.5);
+  color: #c084fc;
+}
+
+.neural-orb-wrapper {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.neural-orb-core {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #8b5cf6;
+  box-shadow: 0 0 10px #8b5cf6, 0 0 18px rgba(139, 92, 246, 0.6);
+}
+
+.neural-orb-ring-1 {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid rgba(139, 92, 246, 0.8);
+  border-top-color: transparent;
+  animation: spin3dRing 3s linear infinite;
+}
+
+.neural-orb-ring-2 {
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(0, 240, 255, 0.8);
+  border-bottom-color: transparent;
+  animation: spin3dRingRev 4s linear infinite;
+}
+
+.model-badge-3d {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 9999px;
+  background: rgba(139, 92, 246, 0.15);
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  color: #c084fc;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.chat-bubble-3d-user {
+  background: linear-gradient(135deg, rgba(14, 116, 144, 0.35) 0%, rgba(3, 105, 161, 0.2) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  color: #f8fafc;
+}
+
+.chat-bubble-3d-ai {
+  background: linear-gradient(135deg, rgba(30, 27, 75, 0.5) 0%, rgba(15, 23, 42, 0.75) 100%);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+}
+
+.quick-action-3d-chip {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #38bdf8;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.quick-action-3d-chip:hover:not(:disabled) {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: #38bdf8;
+  color: #f0f9ff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(56, 189, 248, 0.25);
 }

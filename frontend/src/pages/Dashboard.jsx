@@ -12,6 +12,7 @@ import { useVaultKey } from '../hooks/useVaultKey.js';
 import { VaultKeySetup } from '../components/VaultKeySetup.jsx';
 import CyberVaultCanvas3D from '../components/ui3d/CyberVaultCanvas3D.jsx';
 import TiltCard3D from '../components/ui3d/TiltCard3D.jsx';
+import VaultDoorTransition3D from '../components/ui3d/VaultDoorTransition3D.jsx';
 
 /**
  * Main application dashboard featuring Received / Sent / New Upload views,
@@ -36,6 +37,15 @@ export function Dashboard() {
   const [toasts, setToasts] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+
+  // Cinematic 3D vault locker opening transition trigger on login
+  const [playVaultDoor, setPlayVaultDoor] = useState(() => {
+    try {
+      return typeof sessionStorage !== 'undefined' && sessionStorage.getItem('cv_play_vault_door') === 'true';
+    } catch (_) {
+      return false;
+    }
+  });
 
   const dismissToast = useCallback((id) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -118,46 +128,81 @@ export function Dashboard() {
     >
       <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         <CyberVaultCanvas3D opacity={0.18} speed={0.5} />
+        {playVaultDoor && (
+          <VaultDoorTransition3D
+            onComplete={() => {
+              try {
+                sessionStorage.removeItem('cv_play_vault_door');
+              } catch (_) {}
+              setPlayVaultDoor(false);
+            }}
+          />
+        )}
+
+        {/* Interactive 3D Cryptographic Pipeline Stepper */}
+        <div className="pipeline-stepper-3d preserve-3d">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.85rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', fontWeight: 700, color: '#00f0ff', letterSpacing: '0.06em' }}>
+              <span>&#9670;</span> CIPHER VAULT END-TO-END CRYPTOGRAPHIC PIPELINE
+            </div>
+            <div style={{ fontSize: '0.72rem', color: '#94a3b8', fontFamily: 'var(--font-mono)' }}>
+              Zero-Cloud Isolation Verified
+            </div>
+          </div>
+          <div className="pipeline-steps-track">
+            <div className="pipeline-node-box">
+              <div className="pipeline-node-badge">1</div>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#f8fafc' }}>Client Seal</div>
+              <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>AES-256-GCM Stream</div>
+            </div>
+            <div style={{ height: '2px', flex: 0.5, minWidth: '20px', background: 'linear-gradient(90deg, #00f0ff, #10b981)' }} />
+            <div className="pipeline-node-box">
+              <div className="pipeline-node-badge" style={{ borderColor: '#10b981', color: '#10b981', boxShadow: '0 0 10px rgba(16, 185, 129, 0.4)' }}>2</div>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#f8fafc' }}>Untrusted Blob</div>
+              <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Zero-Knowledge Store</div>
+            </div>
+            <div style={{ height: '2px', flex: 0.5, minWidth: '20px', background: 'linear-gradient(90deg, #10b981, #f59e0b)' }} />
+            <div className="pipeline-node-box">
+              <div className="pipeline-node-badge" style={{ borderColor: '#f59e0b', color: '#f59e0b', boxShadow: '0 0 10px rgba(245, 158, 11, 0.4)' }}>3</div>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#f8fafc' }}>Geofence + MFA</div>
+              <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>GPS Haversine Gate</div>
+            </div>
+            <div style={{ height: '2px', flex: 0.5, minWidth: '20px', background: 'linear-gradient(90deg, #f59e0b, #00f0ff)' }} />
+            <div className="pipeline-node-box">
+              <div className="pipeline-node-badge">4</div>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#f8fafc' }}>RAM Unwrap</div>
+              <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>ECDH P-256 Key</div>
+            </div>
+            <div style={{ height: '2px', flex: 0.5, minWidth: '20px', background: 'linear-gradient(90deg, #00f0ff, #8b5cf6)' }} />
+            <div className="pipeline-node-box">
+              <div className="pipeline-node-badge" style={{ borderColor: '#8b5cf6', color: '#8b5cf6', boxShadow: '0 0 10px rgba(139, 92, 246, 0.4)' }}>5</div>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#f8fafc' }}>Llama 3 RAG</div>
+              <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>127.0.0.1 Offline AI</div>
+            </div>
+          </div>
+        </div>
+
         {/* Navigation Tabs */}
         <div
           role="tablist"
           aria-label="Dashboard views"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            borderBottom: '2px solid #e2e8f0',
-            paddingBottom: '0.25rem'
-          }}
+          className="tab-3d-container"
         >
           <button
             type="button"
             role="tab"
             aria-selected={activeTab === 'received'}
             onClick={() => setActiveTab('received')}
-            className={`tab-btn ${activeTab === 'received' ? 'tab-active' : ''}`}
-            style={{
-              padding: '0.65rem 1.25rem',
-              fontWeight: 600,
-              fontSize: '0.92rem',
-              cursor: 'pointer',
-              border: 'none',
-              background: 'transparent',
-              color: activeTab === 'received' ? '#2563eb' : '#64748b',
-              borderBottom: activeTab === 'received' ? '2px solid #2563eb' : '2px solid transparent',
-              marginBottom: '-2px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem'
-            }}
+            className={`tab-btn tab-3d-btn ${activeTab === 'received' ? 'tab-active' : ''}`}
           >
             <span>Received Documents</span>
             <span
               style={{
                 fontSize: '0.75rem',
-                backgroundColor: activeTab === 'received' ? '#dbeafe' : '#f1f5f9',
-                color: activeTab === 'received' ? '#1e40af' : '#475569',
-                padding: '0.1rem 0.5rem',
+                backgroundColor: activeTab === 'received' ? 'rgba(0, 240, 255, 0.2)' : 'rgba(30, 41, 59, 0.8)',
+                color: activeTab === 'received' ? '#00f0ff' : '#94a3b8',
+                border: activeTab === 'received' ? '1px solid rgba(0, 240, 255, 0.4)' : '1px solid rgba(255, 255, 255, 0.1)',
+                padding: '0.1rem 0.55rem',
                 borderRadius: '9999px',
                 fontWeight: 700
               }}
@@ -171,29 +216,16 @@ export function Dashboard() {
             role="tab"
             aria-selected={activeTab === 'sent'}
             onClick={() => setActiveTab('sent')}
-            className={`tab-btn ${activeTab === 'sent' ? 'tab-active' : ''}`}
-            style={{
-              padding: '0.65rem 1.25rem',
-              fontWeight: 600,
-              fontSize: '0.92rem',
-              cursor: 'pointer',
-              border: 'none',
-              background: 'transparent',
-              color: activeTab === 'sent' ? '#2563eb' : '#64748b',
-              borderBottom: activeTab === 'sent' ? '2px solid #2563eb' : '2px solid transparent',
-              marginBottom: '-2px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem'
-            }}
+            className={`tab-btn tab-3d-btn ${activeTab === 'sent' ? 'tab-active' : ''}`}
           >
             <span>Sent Documents</span>
             <span
               style={{
                 fontSize: '0.75rem',
-                backgroundColor: activeTab === 'sent' ? '#dbeafe' : '#f1f5f9',
-                color: activeTab === 'sent' ? '#1e40af' : '#475569',
-                padding: '0.1rem 0.5rem',
+                backgroundColor: activeTab === 'sent' ? 'rgba(0, 240, 255, 0.2)' : 'rgba(30, 41, 59, 0.8)',
+                color: activeTab === 'sent' ? '#00f0ff' : '#94a3b8',
+                border: activeTab === 'sent' ? '1px solid rgba(0, 240, 255, 0.4)' : '1px solid rgba(255, 255, 255, 0.1)',
+                padding: '0.1rem 0.55rem',
                 borderRadius: '9999px',
                 fontWeight: 700
               }}
@@ -207,18 +239,7 @@ export function Dashboard() {
             role="tab"
             aria-selected={activeTab === 'upload'}
             onClick={() => setActiveTab('upload')}
-            className={`tab-btn ${activeTab === 'upload' ? 'tab-active' : ''}`}
-            style={{
-              padding: '0.65rem 1.25rem',
-              fontWeight: 600,
-              fontSize: '0.92rem',
-              cursor: 'pointer',
-              border: 'none',
-              background: 'transparent',
-              color: activeTab === 'upload' ? '#2563eb' : '#64748b',
-              borderBottom: activeTab === 'upload' ? '2px solid #2563eb' : '2px solid transparent',
-              marginBottom: '-2px'
-            }}
+            className={`tab-btn tab-3d-btn ${activeTab === 'upload' ? 'tab-active' : ''}`}
           >
             + New Upload
           </button>
@@ -232,27 +253,27 @@ export function Dashboard() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              backgroundColor: vaultStatus === 'mismatch' ? '#fff1f2' : '#eff6ff',
-              border: `1px solid ${vaultStatus === 'mismatch' ? '#fecdd3' : '#bfdbfe'}`,
-              borderRadius: '8px',
+              backgroundColor: vaultStatus === 'mismatch' ? 'rgba(69, 10, 10, 0.85)' : 'rgba(15, 23, 42, 0.9)',
+              border: `1px solid ${vaultStatus === 'mismatch' ? 'rgba(244, 63, 94, 0.6)' : 'rgba(0, 240, 255, 0.35)'}`,
+              borderRadius: '10px',
               padding: '0.85rem 1.25rem',
-              marginBottom: '1.5rem',
+              marginBottom: '1rem',
               gap: '1rem',
-              boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
+              boxShadow: '0 8px 25px -5px rgba(0, 0, 0, 0.8), inset 0 1px 1px rgba(255, 255, 255, 0.1)'
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               <span style={{ fontSize: '1.25rem' }}>
                 {vaultStatus === 'mismatch' ? '⚠️' : '🔑'}
               </span>
-              <div style={{ fontSize: '0.875rem', color: vaultStatus === 'mismatch' ? '#9f1239' : '#1e40af' }}>
+              <div style={{ fontSize: '0.875rem', color: vaultStatus === 'mismatch' ? '#fecdd3' : '#cbd5e1' }}>
                 {vaultStatus === 'mismatch' ? (
                   <>
-                    <strong>Vault Key Mismatch:</strong> This browser does not hold the private key for your registered vault key. Documents sent to that key cannot be opened on this device.
+                    <strong style={{ color: '#f43f5e' }}>Vault Key Mismatch:</strong> This browser does not hold the private key for your registered vault key. Documents sent to that key cannot be opened on this device.
                   </>
                 ) : (
                   <>
-                    <strong>Enable Secure Delivery:</strong> Set up a browser vault key so senders can deliver documents directly without sharing a QR code.
+                    <strong style={{ color: '#00f0ff' }}>Enable Secure Delivery:</strong> Set up a browser vault key so senders can deliver documents directly without sharing a QR code.
                   </>
                 )}
               </div>
@@ -261,13 +282,11 @@ export function Dashboard() {
               <button
                 type="button"
                 onClick={() => setShowVaultKeyModal(true)}
-                className={`btn ${vaultStatus === 'mismatch' ? 'btn-secondary' : 'btn-primary'}`}
+                className={`btn ${vaultStatus === 'mismatch' ? 'btn-secondary btn-3d-danger' : 'btn-primary btn-3d-primary'}`}
                 style={{
                   padding: '0.35rem 0.85rem',
                   fontSize: '0.8rem',
-                  width: 'auto',
-                  borderColor: vaultStatus === 'mismatch' ? '#f43f5e' : undefined,
-                  color: vaultStatus === 'mismatch' ? '#be123c' : undefined
+                  width: 'auto'
                 }}
               >
                 {vaultStatus === 'mismatch' ? 'Resolve Mismatch' : 'Set Up Vault Key'}
@@ -280,7 +299,7 @@ export function Dashboard() {
                   background: 'none',
                   border: 'none',
                   fontSize: '1.25rem',
-                  color: '#64748b',
+                  color: '#94a3b8',
                   cursor: 'pointer',
                   padding: '0 0.25rem',
                   lineHeight: 1
@@ -335,14 +354,14 @@ export function Dashboard() {
             {activeTab === 'received' && (
               <div>
                 <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h2 style={{ fontSize: '1.15rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>
+                  <h2 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0, color: '#f8fafc', textShadow: '0 0 10px rgba(0, 240, 255, 0.35)' }}>
                     Received Cryptographic Documents
                   </h2>
                   <button
                     type="button"
                     onClick={refresh}
-                    className="btn btn-secondary"
-                    style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', width: 'auto' }}
+                    className="btn btn-secondary btn-3d-cyber"
+                    style={{ padding: '0.4rem 0.9rem', fontSize: '0.8rem', width: 'auto' }}
                   >
                     Refresh
                   </button>
@@ -359,14 +378,14 @@ export function Dashboard() {
             {activeTab === 'sent' && (
               <div>
                 <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h2 style={{ fontSize: '1.15rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>
+                  <h2 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0, color: '#f8fafc', textShadow: '0 0 10px rgba(0, 240, 255, 0.35)' }}>
                     Sent Sealed Documents
                   </h2>
                   <button
                     type="button"
                     onClick={refresh}
-                    className="btn btn-secondary"
-                    style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', width: 'auto' }}
+                    className="btn btn-secondary btn-3d-cyber"
+                    style={{ padding: '0.4rem 0.9rem', fontSize: '0.8rem', width: 'auto' }}
                   >
                     Refresh
                   </button>

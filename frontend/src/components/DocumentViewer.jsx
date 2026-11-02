@@ -121,8 +121,9 @@ export function DocumentViewer({ blob: initialBlob, contentType, originalName, o
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(15, 23, 42, 0.85)',
-        backdropFilter: 'blur(4px)',
+        backgroundColor: 'rgba(3, 7, 18, 0.92)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
         display: 'flex',
         flexDirection: 'column',
         zIndex: 10000
@@ -134,18 +135,24 @@ export function DocumentViewer({ blob: initialBlob, contentType, originalName, o
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          backgroundColor: '#0f172a',
+          backgroundColor: 'rgba(10, 16, 32, 0.95)',
           color: '#ffffff',
-          padding: '0.75rem 1.5rem',
-          borderBottom: '1px solid #334155'
+          padding: '0.85rem 1.75rem',
+          borderBottom: '1px solid rgba(56, 189, 248, 0.25)',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.6)'
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <span style={{ fontSize: '1.25rem' }}>&#128196;</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+          <div style={{ width: '38px', height: '38px', borderRadius: '8px', background: 'rgba(0, 240, 255, 0.12)', border: '1px solid rgba(0, 240, 255, 0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ fontSize: '1.25rem' }}>&#128196;</span>
+          </div>
           <div>
-            <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{fileName}</div>
-            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-              Auto-closes in {formatRemainingTime(timeRemainingSeconds)}
+            <div style={{ fontWeight: 700, fontSize: '1rem', color: '#f8fafc', textShadow: '0 0 10px rgba(0, 240, 255, 0.3)' }}>{fileName}</div>
+            <div style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '2px' }}>
+              <span>Auto-closes in</span>
+              <strong style={{ color: '#00f0ff', fontFamily: 'var(--font-mono)' }}>
+                {formatRemainingTime(timeRemainingSeconds)}
+              </strong>
             </div>
           </div>
         </div>
@@ -153,12 +160,9 @@ export function DocumentViewer({ blob: initialBlob, contentType, originalName, o
         <button
           type="button"
           onClick={handleClose}
-          className="btn btn-secondary"
+          className="btn btn-secondary btn-3d-danger"
           style={{
-            backgroundColor: '#334155',
-            color: '#ffffff',
-            borderColor: '#475569',
-            padding: '0.4rem 1rem',
+            padding: '0.45rem 1.15rem',
             fontSize: '0.85rem',
             width: 'auto'
           }}
@@ -167,19 +171,33 @@ export function DocumentViewer({ blob: initialBlob, contentType, originalName, o
         </button>
       </header>
 
-      {/* Security Banner */}
+      {/* 3D Volatile RAM Security Banner */}
       <div
         role="note"
-        style={{
-          backgroundColor: '#1e293b',
-          color: '#94a3b8',
-          fontSize: '0.8rem',
-          padding: '0.5rem 1.5rem',
-          textAlign: 'center',
-          borderBottom: '1px solid #334155'
-        }}
+        className="ram-security-banner-3d"
       >
-        Decrypted in memory on the server and not stored there. Your browser holds it only while this window is open.
+        <span className="volatile-ram-pulse" />
+        <span style={{ fontWeight: 700, color: '#10b981', letterSpacing: '0.04em' }}>
+          VOLATILE RAM ISOLATION ACTIVE:
+        </span>
+        <span>
+          Decrypted in memory on the server and not stored there. Your browser holds it only while this window is open.
+        </span>
+        <span
+          style={{
+            marginLeft: 'auto',
+            padding: '0.15rem 0.55rem',
+            borderRadius: '4px',
+            background: 'rgba(0, 240, 255, 0.15)',
+            border: '1px solid rgba(0, 240, 255, 0.35)',
+            color: '#00f0ff',
+            fontSize: '0.72rem',
+            fontFamily: 'var(--font-mono)',
+            fontWeight: 700
+          }}
+        >
+          SESSION ID: {blob ? `${Math.round(blob.size / 1024)}KB RAM` : 'VOLATILE'}
+        </span>
       </div>
 
       {/* Viewer Body */}
@@ -192,7 +210,7 @@ export function DocumentViewer({ blob: initialBlob, contentType, originalName, o
           justifyContent: 'flex-start',
           overflow: 'auto',
           padding: '1.5rem',
-          backgroundColor: '#1e293b',
+          backgroundColor: '#030712',
           gap: '1rem',
           boxSizing: 'border-box'
         }}
@@ -219,18 +237,31 @@ export function DocumentViewer({ blob: initialBlob, contentType, originalName, o
           <>
             <LocalAiPanel blob={blob} ai={localAi} />
             {normalizedType === 'application/pdf' && (
-              <iframe
-                title="Decrypted PDF Document"
-                src={objectUrl}
-                referrerPolicy="no-referrer"
+              <div
+                className="preserve-3d"
                 style={{
                   width: '100%',
                   height: '100%',
-                  border: 'none',
-                  borderRadius: '6px',
-                  backgroundColor: '#ffffff'
+                  minHeight: '620px',
+                  borderRadius: '12px',
+                  padding: '3px',
+                  background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.35) 0%, rgba(139, 92, 246, 0.35) 100%)',
+                  boxShadow: '0 20px 45px -10px rgba(0, 0, 0, 0.9), 0 0 20px rgba(0, 240, 255, 0.15)'
                 }}
-              />
+              >
+                <iframe
+                  title="Decrypted PDF Document"
+                  src={objectUrl}
+                  referrerPolicy="no-referrer"
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    border: 'none',
+                    borderRadius: '9px',
+                    backgroundColor: '#ffffff'
+                  }}
+                />
+              </div>
             )}
 
             {normalizedType === 'image/jpeg' && (

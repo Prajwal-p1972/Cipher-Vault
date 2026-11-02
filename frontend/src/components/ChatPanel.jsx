@@ -69,28 +69,35 @@ export function ChatPanel({ session }) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          borderBottom: '1px solid #1e293b',
-          paddingBottom: '0.5rem'
+          borderBottom: '1px solid rgba(139, 92, 246, 0.25)',
+          paddingBottom: '0.65rem'
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <span style={{ fontSize: '1.1rem' }}>&#128172;</span>
-          <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600 }}>
-            Ask Document Questions
-          </h4>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          <div className="neural-orb-wrapper" aria-hidden="true">
+            <div className="neural-orb-ring-1" />
+            <div className="neural-orb-ring-2" />
+            <div className="neural-orb-core" />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.01em' }}>
+              Ask Document Questions
+            </h4>
+            <span className="model-badge-3d">
+              <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#8b5cf6' }} />
+              Llama 3 • Offline RAG
+            </span>
+          </div>
         </div>
         <button
           type="button"
           onClick={clear}
           disabled={messages.length === 0 && !isStreaming}
           aria-label="Clear chat"
+          className="btn-3d-danger"
           style={{
-            background: 'none',
-            border: '1px solid #475569',
-            borderRadius: '4px',
-            color: '#94a3b8',
             fontSize: '0.75rem',
-            padding: '0.25rem 0.6rem',
+            padding: '0.3rem 0.75rem',
             cursor: messages.length === 0 && !isStreaming ? 'not-allowed' : 'pointer',
             opacity: messages.length === 0 && !isStreaming ? 0.5 : 1
           }}
@@ -242,14 +249,7 @@ export function ChatPanel({ session }) {
                     <span
                       key={s.page ?? idx}
                       data-testid="page-chip"
-                      style={{
-                        backgroundColor: '#334155',
-                        color: '#38bdf8',
-                        padding: '0.1rem 0.45rem',
-                        borderRadius: '4px',
-                        fontSize: '0.75rem',
-                        fontWeight: 500
-                      }}
+                      className="citation-pill-3d"
                     >
                       p.{s.page}
                     </span>

@@ -46,15 +46,15 @@ function getStatusBadgeStyle(status) {
   const s = String(status || '').toLowerCase();
   switch (s) {
     case 'sealed':
-      return { label: 'Sealed', bg: '#ecfdf5', color: '#065f46', border: '#a7f3d0' };
+      return { label: 'Sealed', className: 'badge-3d-sealed' };
     case 'consumed':
-      return { label: 'Consumed', bg: '#f1f5f9', color: '#475569', border: '#cbd5e1' };
+      return { label: 'Consumed', className: 'badge-3d-consumed' };
     case 'expired':
-      return { label: 'Expired', bg: '#fffbeb', color: '#92400e', border: '#fde68a' };
+      return { label: 'Expired', className: 'badge-3d-expired' };
     case 'revoked':
-      return { label: 'Revoked', bg: '#fef2f2', color: '#991b1b', border: '#fecaca' };
+      return { label: 'Revoked', className: 'badge-3d-expired' };
     default:
-      return { label: s || 'Unknown', bg: '#f8fafc', color: '#334155', border: '#e2e8f0' };
+      return { label: s || 'Unknown', className: 'badge-3d-sealed' };
   }
 }
 
@@ -81,14 +81,14 @@ export function DocumentTable({
         style={{
           padding: '3rem 1.5rem',
           textAlign: 'center',
-          backgroundColor: '#f8fafc',
-          borderRadius: '8px',
-          border: '1px dashed #cbd5e1',
-          color: '#64748b'
+          backgroundColor: 'rgba(15, 23, 42, 0.6)',
+          borderRadius: '10px',
+          border: '1px dashed rgba(56, 189, 248, 0.3)',
+          color: '#94a3b8'
         }}
       >
         <span style={{ fontSize: '2rem', display: 'block', marginBottom: '0.5rem' }}>&#128194;</span>
-        <p style={{ margin: 0, fontSize: '0.95rem', fontWeight: 500 }}>{emptyMessage}</p>
+        <p style={{ margin: 0, fontSize: '0.95rem', fontWeight: 500, color: '#cbd5e1' }}>{emptyMessage}</p>
       </div>
     );
   }
@@ -96,7 +96,7 @@ export function DocumentTable({
   const isReceived = type === 'received';
 
   return (
-    <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+    <div style={{ overflowX: 'auto', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '10px', background: 'rgba(15, 23, 42, 0.85)', boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.8)' }}>
       <table
         className="doc-table"
         style={{
@@ -107,23 +107,23 @@ export function DocumentTable({
         }}
       >
         <thead>
-          <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-            <th style={{ padding: '0.75rem 1rem', fontWeight: 600, color: '#334155' }}>Name</th>
-            <th style={{ padding: '0.75rem 1rem', fontWeight: 600, color: '#334155' }}>
+          <tr style={{ backgroundColor: 'rgba(10, 16, 32, 0.95)', borderBottom: '1px solid rgba(56, 189, 248, 0.25)' }}>
+            <th style={{ padding: '0.85rem 1rem', fontWeight: 700, color: '#94a3b8', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Name</th>
+            <th style={{ padding: '0.85rem 1rem', fontWeight: 700, color: '#94a3b8', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               {isReceived ? 'Sender' : 'Recipient'}
             </th>
-            <th style={{ padding: '0.75rem 1rem', fontWeight: 600, color: '#334155' }}>Size</th>
-            <th style={{ padding: '0.75rem 1rem', fontWeight: 600, color: '#334155' }}>Created</th>
-            <th style={{ padding: '0.75rem 1rem', fontWeight: 600, color: '#334155' }}>Expires</th>
-            <th style={{ padding: '0.75rem 1rem', fontWeight: 600, color: '#334155' }}>Status</th>
-            <th style={{ padding: '0.75rem 1rem', fontWeight: 600, color: '#334155' }}>Flags</th>
+            <th style={{ padding: '0.85rem 1rem', fontWeight: 700, color: '#94a3b8', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Size</th>
+            <th style={{ padding: '0.85rem 1rem', fontWeight: 700, color: '#94a3b8', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Created</th>
+            <th style={{ padding: '0.85rem 1rem', fontWeight: 700, color: '#94a3b8', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Expires</th>
+            <th style={{ padding: '0.85rem 1rem', fontWeight: 700, color: '#94a3b8', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
+            <th style={{ padding: '0.85rem 1rem', fontWeight: 700, color: '#94a3b8', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Flags</th>
             {isReceived && (
-              <th style={{ padding: '0.75rem 1rem', fontWeight: 600, color: '#334155' }}>Action</th>
+              <th style={{ padding: '0.85rem 1rem', fontWeight: 700, color: '#94a3b8', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Action</th>
             )}
           </tr>
         </thead>
         <tbody>
-          {documents.map((doc) => {
+          {documents.map((doc, index) => {
             const statusStyle = getStatusBadgeStyle(doc.status);
             const isOneTime = Boolean(doc.oneTimeUse || doc.policy?.oneTimeUse);
             const isGeofenced = Boolean(doc.hasGeofence || doc.policy?.hasGeofence || doc.policy?.geofence);
@@ -153,50 +153,39 @@ export function DocumentTable({
                 key={doc.id}
                 data-testid={`doc-row-${doc.id}`}
                 style={{
-                  borderBottom: '1px solid #f1f5f9',
-                  backgroundColor: '#ffffff'
+                  borderBottom: '1px solid rgba(30, 41, 59, 0.6)',
+                  backgroundColor: index % 2 === 0 ? 'rgba(15, 23, 42, 0.4)' : 'transparent'
                 }}
               >
-                <td style={{ padding: '0.75rem 1rem', fontWeight: 500, color: '#0f172a' }}>
+                <td style={{ padding: '0.85rem 1rem', fontWeight: 600, color: '#f8fafc' }}>
                   <div style={{ wordBreak: 'break-word', maxWidth: '240px' }}>
                     {doc.originalName}
                   </div>
                 </td>
 
-                <td style={{ padding: '0.75rem 1rem', color: '#475569' }}>
+                <td style={{ padding: '0.85rem 1rem', color: '#cbd5e1' }}>
                   <span style={{ wordBreak: 'break-all' }}>{counterpart}</span>
                 </td>
 
-                <td style={{ padding: '0.75rem 1rem', color: '#475569', whiteSpace: 'nowrap' }}>
+                <td style={{ padding: '0.85rem 1rem', color: '#94a3b8', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>
                   {formatBytes(doc.sizeBytes)}
                 </td>
 
-                <td style={{ padding: '0.75rem 1rem', color: '#475569', whiteSpace: 'nowrap' }}>
+                <td style={{ padding: '0.85rem 1rem', color: '#94a3b8', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>
                   {formatDate(doc.createdAt)}
                 </td>
 
-                <td style={{ padding: '0.75rem 1rem', color: '#475569', whiteSpace: 'nowrap' }}>
+                <td style={{ padding: '0.85rem 1rem', color: '#94a3b8', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>
                   {formatDate(expiresAtVal)}
                 </td>
 
-                <td style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      padding: '0.2rem 0.55rem',
-                      borderRadius: '9999px',
-                      fontSize: '0.75rem',
-                      fontWeight: 600,
-                      backgroundColor: statusStyle.bg,
-                      color: statusStyle.color,
-                      border: `1px solid ${statusStyle.border}`
-                    }}
-                  >
+                <td style={{ padding: '0.85rem 1rem', whiteSpace: 'nowrap' }}>
+                  <span className={statusStyle.className}>
                     {statusStyle.label}
                   </span>
                 </td>
 
-                <td style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>
+                <td style={{ padding: '0.85rem 1rem', whiteSpace: 'nowrap' }}>
                   <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', alignItems: 'center' }}>
                     <span
                       data-testid="delivery-badge"
@@ -206,9 +195,9 @@ export function DocumentTable({
                         borderRadius: '4px',
                         fontSize: '0.7rem',
                         fontWeight: 600,
-                        backgroundColor: doc.delivery === 'wrapped' ? '#eff6ff' : '#f5f3ff',
-                        color: doc.delivery === 'wrapped' ? '#1d4ed8' : '#6d28d9',
-                        border: `1px solid ${doc.delivery === 'wrapped' ? '#bfdbfe' : '#ddd6fe'}`
+                        backgroundColor: doc.delivery === 'wrapped' ? 'rgba(0, 240, 255, 0.12)' : 'rgba(139, 92, 246, 0.12)',
+                        color: doc.delivery === 'wrapped' ? '#00f0ff' : '#c084fc',
+                        border: `1px solid ${doc.delivery === 'wrapped' ? 'rgba(0, 240, 255, 0.35)' : 'rgba(139, 92, 246, 0.35)'}`
                       }}
                     >
                       {doc.delivery === 'wrapped' ? 'Secure delivery' : 'QR handover'}
@@ -222,9 +211,9 @@ export function DocumentTable({
                           borderRadius: '4px',
                           fontSize: '0.7rem',
                           fontWeight: 600,
-                          backgroundColor: '#fef3c7',
-                          color: '#92400e',
-                          border: '1px solid #fde68a'
+                          backgroundColor: 'rgba(245, 158, 11, 0.12)',
+                          color: '#f59e0b',
+                          border: '1px solid rgba(245, 158, 11, 0.35)'
                         }}
                       >
                         1-Time
@@ -239,9 +228,9 @@ export function DocumentTable({
                           borderRadius: '4px',
                           fontSize: '0.7rem',
                           fontWeight: 600,
-                          backgroundColor: '#e0e7ff',
-                          color: '#3730a3',
-                          border: '1px solid #c7d2fe'
+                          backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                          color: '#34d399',
+                          border: '1px solid rgba(16, 185, 129, 0.35)'
                         }}
                       >
                         Geofenced
@@ -251,15 +240,15 @@ export function DocumentTable({
                 </td>
 
                 {isReceived && (
-                  <td style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>
+                  <td style={{ padding: '0.85rem 1rem', whiteSpace: 'nowrap' }}>
                     {canOpen ? (
                       <button
                         type="button"
                         onClick={() => typeof onOpen === 'function' && onOpen(doc)}
-                        className="btn btn-primary"
+                        className="btn btn-primary btn-3d-cyber"
                         style={{
-                          padding: '0.35rem 0.75rem',
-                          fontSize: '0.78rem',
+                          padding: '0.4rem 0.95rem',
+                          fontSize: '0.8rem',
                           width: 'auto',
                           cursor: 'pointer'
                         }}
@@ -274,14 +263,14 @@ export function DocumentTable({
                         title={disabledReason}
                         className="btn btn-secondary"
                         style={{
-                          padding: '0.35rem 0.75rem',
-                          fontSize: '0.78rem',
+                          padding: '0.4rem 0.95rem',
+                          fontSize: '0.8rem',
                           width: 'auto',
-                          opacity: 0.6,
+                          opacity: 0.5,
                           cursor: 'not-allowed',
-                          backgroundColor: '#f1f5f9',
+                          backgroundColor: 'rgba(30, 41, 59, 0.6)',
                           color: '#64748b',
-                          borderColor: '#cbd5e1'
+                          borderColor: 'rgba(255, 255, 255, 0.08)'
                         }}
                       >
                         {disabledReason}
