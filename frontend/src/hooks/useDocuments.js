@@ -19,6 +19,7 @@ export function normalizeDoc(item) {
     mimeType: item.mimeType || 'application/octet-stream',
     sizeBytes: item.sizeBytes ?? 0,
     status: item.status || 'sealed',
+    delivery: item.delivery || 'qr',
     policy: item.policy || {
       expiresAt: item.expiresAt ?? null,
       oneTimeUse: Boolean(item.oneTimeUse),
@@ -26,6 +27,8 @@ export function normalizeDoc(item) {
     },
     sender: item.senderName || item.sender || 'Unknown',
     receiver: item.receiver || null,
+    hasGeofence: Boolean(item.hasGeofence || item.policy?.geofence || item.policy?.hasGeofence),
+    keyEnvelope: item.keyEnvelope || null,
     createdAt: item.createdAt || new Date().toISOString(),
     updatedAt: item.updatedAt || item.createdAt || new Date().toISOString()
   };

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { parsePayload } from '../utils/qrPayload.js';
 import { getCurrentLocation } from '../utils/geolocation.js';
 import { request, requestBlob, ApiError } from '../api/http.js';
-import { unwrapDocumentKey } from '../crypto/vaultKeys.js';
+import { unwrapDocumentKey, getKey } from '../crypto/vaultKeys.js';
 import { AuthContext } from '../auth/AuthContext.jsx';
 import { QrScanner } from './QrScanner.jsx';
 
@@ -28,16 +28,57 @@ import { QrScanner } from './QrScanner.jsx';
  *     policy?: { hasGeofence?: boolean, oneTimeUse?: boolean, expiresAt?: string },
  *     oneTimeUse?: boolean
  *   },
+ *   hasVaultKey?: boolean,
  *   onSuccess: (data: { blob: Blob, contentType: string, originalName: string, status: number }) => void,
  *   onClose: () => void
  * }} props
  */
-export function UnlockModal({ document: doc, onSuccess, onClose }) {
+export function UnlockModal({ document: doc, hasVaultKey, onSuccess, onClose }) {
   const auth = React.useContext(AuthContext);
   const user = auth?.user || null;
-  const isWrapped = doc?.delivery === 'wrapped';
+  const isWrapped =
+    doc?.delivery === 'wrapped' ||
+    doc?.deliveryMode === 'wrapped' ||
+    Boolean(doc?.keyEnvelope) ||
+    Boolean(doc?.envelope);
   const targetDocId = doc?.id || doc?._id;
-  const isGeofenced = Boolean(doc?.hasGeofence || doc?.policy?.hasGeofence);
+  const isGeofenced = Boolean(doc?.hasGeofence || doc?.policy?.hasGeofence || doc?.policy?.geofence);
+
+  const [userHasVaultKey, setUserHasVaultKey] = useState(Boolean(hasVaultKey));
+
+  useEffect(() => {
+    if (hasVaultKey !== undefined) {
+      setUserHasVaultKey(Boolean(hasVaultKey));
+      return;
+    }
+
+    let isMounted = true;
+    const checkLocalKey = async () => {
+      const uid = user?.id || user?._id;
+      if (!uid) {
+        if (isMounted) setUserHasVaultKey(false);
+        return;
+      }
+      try {
+        const serverRes = await request('/api/keys/me');
+        if (serverRes?.registered && serverRes?.keyId) {
+          const localKey = await getKey(uid, serverRes.keyId);
+          if (isMounted) {
+            setUserHasVaultKey(Boolean(localKey?.privateKey));
+          }
+        } else {
+          if (isMounted) setUserHasVaultKey(false);
+        }
+      } catch (_) {
+        if (isMounted) setUserHasVaultKey(false);
+      }
+    };
+
+    checkLocalKey();
+    return () => {
+      isMounted = false;
+    };
+  }, [hasVaultKey, user]);
 
   // Steps: 'loading_envelope' | 'scan' | 'verify' | 'missing_key'
   const [step, setStep] = useState(isWrapped ? 'loading_envelope' : 'scan');
@@ -157,13 +198,32 @@ export function UnlockModal({ document: doc, onSuccess, onClose }) {
 
     if (!documentKeyRef.current) {
       if (isWrapped) {
-        setSubmitError('This document was sent to a key that is not in this browser');
-        setStep('missing_key');
+        try {
+          const envelopeRes = await request(`/api/documents/${targetDocId}/key-envelope`);
+          const envelope = envelopeRes?.envelope;
+          const receiverId =
+            (typeof doc?.receiver === 'object' ? doc.receiver?._id || doc.receiver?.id : doc?.receiver) ||
+            user?.id ||
+            user?._id;
+          const userId = user?.id || user?._id;
+          const unwrappedKey = await unwrapDocumentKey({
+            envelope,
+            docId: targetDocId,
+            receiverId,
+            userId
+          });
+          documentKeyRef.current = unwrappedKey;
+        } catch (_) {
+          documentKeyRef.current = null;
+          setSubmitError('This document was sent to a key that is not in this browser');
+          setStep('missing_key');
+          return;
+        }
       } else {
         setSubmitError('Decryption key is missing. Please scan the QR code again.');
         setStep('scan');
+        return;
       }
-      return;
     }
 
     setSubmitting(true);
@@ -386,6 +446,25 @@ export function UnlockModal({ document: doc, onSuccess, onClose }) {
         {/* STEP 1: SCAN (QR mode only) */}
         {step === 'scan' && (
           <div>
+            {userHasVaultKey && (
+              <div
+                data-testid="legacy-qr-hint"
+                style={{
+                  fontSize: '0.8rem',
+                  color: '#64748b',
+                  marginBottom: '0.75rem',
+                  fontStyle: 'italic',
+                  textAlign: 'center',
+                  padding: '0.5rem 0.75rem',
+                  backgroundColor: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '6px'
+                }}
+              >
+                Note: This document was sealed using legacy QR mode before Vault Keys were established.
+              </div>
+            )}
+
             {scanError && (
               <div
                 className="alert alert-error"

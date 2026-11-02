@@ -410,6 +410,60 @@ describe('UploadForm Component Tests', () => {
       expect(capturedBody.get('delivery')).toBe('qr');
       expect(screen.queryByTestId('secure-upload-success')).toBeNull();
     });
+
+    it('strictly enforces wrapped delivery when recipient has a registered vault key even if QR was selected', async () => {
+      let capturedBody = null;
+      const onSuccess = vi.fn();
+      globalThis.fetch = vi.fn(async (url, init) => {
+        if (url.includes('/api/keys/receiver')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              registered: true,
+              fingerprint: '9999 8888 7777 6666 5555 4444 3333 2222'
+            })
+          };
+        }
+        if (url.includes('/api/documents')) {
+          capturedBody = init.body;
+          return {
+            ok: true,
+            status: 201,
+            json: async () => ({
+              document: { id: 'doc-enforced-1', delivery: 'wrapped', originalName: 'doc.pdf' }
+            })
+          };
+        }
+        return { ok: true, status: 200, json: async () => ({}) };
+      });
+
+      render(<UploadForm onSuccess={onSuccess} />);
+
+      const deliverySelect = screen.getByLabelText(/Delivery Method/i);
+      fireEvent.change(deliverySelect, { target: { value: 'qr' } });
+
+      const fileInput = screen.getByLabelText(/Document File/i);
+      const emailInput = screen.getByLabelText(/Recipient Email/i);
+      const submitBtn = screen.getByRole('button', { name: /Seal & Send Document/i });
+
+      const validFile = new File(['data'], 'doc.pdf', { type: 'application/pdf' });
+      fireEvent.change(fileInput, { target: { files: [validFile] } });
+      fireEvent.change(emailInput, { target: { value: 'hasvault@example.com' } });
+      fireEvent.blur(emailInput);
+
+      // Verify fingerprint appears and delivery switches back to wrapped
+      expect(await screen.findByText(/Receiver key fingerprint:/i)).toBeTruthy();
+      expect(deliverySelect.value).toBe('wrapped');
+
+      fireEvent.click(submitBtn);
+
+      await waitFor(() => {
+        expect(onSuccess).toHaveBeenCalled();
+      });
+
+      expect(capturedBody.get('delivery')).toBe('wrapped');
+    });
   });
 });
 

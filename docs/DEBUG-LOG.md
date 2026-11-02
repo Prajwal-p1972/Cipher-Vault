@@ -13,6 +13,7 @@ This document tracks all findings, root causes, fixes, and verification proofs i
 | **F-03** | Test database isolation between backend daemon and test harness. | Backend initially connected to `mongodb://127.0.0.1:27017/cipher_vault`, while the test script required `mongodb://127.0.0.1:27017/cipher_vault_debug`. | `backend/.env` default `MONGO_URI` pointed to production/dev database `cipher_vault`. Testing against a running server with a separate database would cause direct DB mutations (e.g. promoting user A to admin) to miss the server's database. | Started the backend daemon with environment variable `MONGO_URI=mongodb://127.0.0.1:27017/cipher_vault_debug` so both the server and test suite operate on the isolated throw-away database. | Check 13 passed: `CHECK 13: PASS - Analytics overview (200) and admin audit chain verified (valid: true, checked: 35 entries)`, followed by clean teardown dropping `cipher_vault_debug`. |
 | **F-04** | Ollama local inference service was not listening on loopback port 11434. | `Port 11434 : NOT IN USE` and `ollama --version` reported `could not connect to a running Ollama instance`. | Ollama background server (`ollama serve`) was not running prior to stack initialization. | Launched `ollama serve` daemon process. Verified `GET http://127.0.0.1:11434/api/tags` returned `llama3:latest`. | Port 11434 listening; all AI chat and live summary tests passed. |
 | **F-05** | Dead code in frontend utils: `frontend/src/utils/cryptoBrowser.js`. | Grep across entire codebase showed zero imports of `cryptoBrowser.js`. | File was an obsolete pre-Phase 7 utility superseded by `frontend/src/crypto/vaultKeys.js`. | Removed `frontend/src/utils/cryptoBrowser.js`. Verified frontend tests (129/129) and production build succeed cleanly. | Zero references remaining; bundle size unaffected. |
+| **F-06** | When receiver attempts to open a newly sent document, `UnlockModal.jsx` incorrectly fell back to the QR Scanner UI instead of triggering automated WebCrypto envelope unwrapping. | Receiver dashboard opened QR scanner for wrapped documents; `doc.delivery` was `undefined` in modal props. | 1. `frontend/src/hooks/useDocuments.js:16-32`: `normalizeDoc(item)` stripped `delivery: item.delivery || 'qr'`, causing all documents in `useDocuments()` to have `delivery: undefined`.<br>2. `frontend/src/components/UploadForm.jsx:118`: `handleEmailBlur` exited early if `delivery !== 'wrapped'`, failing to detect receiver vault keys if user was in QR mode, and `handleSubmit` didn't strictly enforce `delivery: 'wrapped'` when a receiver key was registered.<br>3. `frontend/src/components/UnlockModal.jsx`: Initialization and state machine did not robustly detect wrapped documents or provide legacy QR fallback hint. | 1. Added `delivery: item.delivery || 'qr'`, `hasGeofence`, and `keyEnvelope` to `useDocuments.js:normalizeDoc`.<br>2. Updated `UploadForm.jsx` to check receiver key on blur, auto-switch to and strictly enforce `delivery: 'wrapped'` in FormData upload payload when a receiver vault key is detected.<br>3. Hardened `UnlockModal.jsx` state machine: `isWrapped` evaluates `delivery`, `deliveryMode`, and envelope; wrapped docs strictly bypass QR scan directly to automated envelope unwrapping / TOTP prompt; added graceful fallback UI hint text to QR scanner screen: *"Note: This document was sealed using legacy QR mode before Vault Keys were established."* when user has a Vault Key. | Vitest frontend suite: **132 / 132 PASS** (23 files); production build passes in 16.45s with zero errors. |
 
 ---
 
@@ -29,8 +30,8 @@ This document tracks all findings, root causes, fixes, and verification proofs i
 - Disk Storage E2E (`npm run test:e2e:disk`): **1 / 1 PASS**
 
 ### 2. Frontend Test Suites
-- Vitest Component & Unit Tests (`npm test`): **129 / 129 PASS** (23 files)
-- Production Build (`npm run build`): **PASS** (Zero errors, Vite build completed in 16.68s)
+- Vitest Component & Unit Tests (`npm test`): **132 / 132 PASS** (23 files)
+- Production Build (`npm run build`): **PASS** (Zero errors, Vite build completed in 16.45s)
 
 ### 3. AI Microservice Test Suites
 - Fast Pytest (`pytest -q -m "not ocr and not slow and not llm"`): **169 PASS**, 3 deselected
@@ -39,3 +40,4 @@ This document tracks all findings, root causes, fixes, and verification proofs i
 
 ### 4. Real HTTP End-to-End Test Suite (`scripts/e2e-live.mjs`)
 - All 13 Live Checks: **13 / 13 PASS**
+

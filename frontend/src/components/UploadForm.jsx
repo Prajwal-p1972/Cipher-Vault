@@ -115,7 +115,6 @@ export function UploadForm({ onSuccess }) {
   };
 
   const handleEmailBlur = async () => {
-    if (delivery !== 'wrapped') return;
     const email = receiverEmail.trim();
     if (!email || !email.includes('@')) {
       setReceiverKeyStatus(null);
@@ -129,6 +128,7 @@ export function UploadForm({ onSuccess }) {
       if (res && res.registered && res.fingerprint) {
         setReceiverKeyStatus('found');
         setReceiverFingerprint(res.fingerprint);
+        setDelivery('wrapped');
       } else {
         setReceiverKeyStatus('not_found');
         setReceiverFingerprint(null);
@@ -188,7 +188,10 @@ export function UploadForm({ onSuccess }) {
     }
 
     // 3. In Secure mode, enforce verified receiver key
-    if (delivery === 'wrapped' && receiverKeyStatus === 'not_found') {
+    const hasRegisteredVaultKey = receiverKeyStatus === 'found' && Boolean(receiverFingerprint);
+    const effectiveDelivery = hasRegisteredVaultKey ? 'wrapped' : delivery;
+
+    if (effectiveDelivery === 'wrapped' && receiverKeyStatus === 'not_found') {
       setErrorMessage('Recipient has not set up a vault key. They must set up a browser vault key to receive secure deliveries, or you can switch to In-person QR handover.');
       return;
     }
@@ -256,7 +259,7 @@ export function UploadForm({ onSuccess }) {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('receiverEmail', receiverEmail.trim());
-    formData.append('delivery', delivery);
+    formData.append('delivery', effectiveDelivery);
     formData.append('oneTimeUse', oneTimeUse ? 'true' : 'false');
 
     if (isoExpiresAt) {
@@ -290,7 +293,7 @@ export function UploadForm({ onSuccess }) {
       setReceiverKeyStatus(null);
       setReceiverFingerprint(null);
 
-      if (delivery === 'wrapped') {
+      if (effectiveDelivery === 'wrapped') {
         setSecureSuccessMessage('Document securely sealed and delivered! The recipient can open it directly in their verified browser without a QR code.');
       }
 
@@ -323,9 +326,11 @@ export function UploadForm({ onSuccess }) {
     }
   };
 
+  const hasRegisteredVaultKey = receiverKeyStatus === 'found' && Boolean(receiverFingerprint);
+
   const isSubmitDisabled =
     submitting ||
-    (delivery === 'wrapped' && receiverKeyStatus === 'not_found');
+    (!hasRegisteredVaultKey && delivery === 'wrapped' && receiverKeyStatus === 'not_found');
 
   return (
     <form onSubmit={handleSubmit} className="upload-form" noValidate>
@@ -373,18 +378,21 @@ export function UploadForm({ onSuccess }) {
         </label>
         <select
           id={deliveryInputId}
-          value={delivery}
+          value={hasRegisteredVaultKey ? 'wrapped' : delivery}
           onChange={(e) => {
+            if (hasRegisteredVaultKey) return;
             setDelivery(e.target.value);
             setErrorMessage(null);
             setSecureSuccessMessage(null);
           }}
-          disabled={submitting}
+          disabled={submitting || hasRegisteredVaultKey}
           className="form-input"
           style={{ padding: '0.5rem' }}
         >
           <option value="wrapped">Secure delivery (recommended)</option>
-          <option value="qr">In-person QR handover</option>
+          <option value="qr" disabled={hasRegisteredVaultKey}>
+            In-person QR handover{hasRegisteredVaultKey ? ' (Receiver Vault Key detected)' : ''}
+          </option>
         </select>
         <span style={{ fontSize: '0.78rem', color: '#64748b', display: 'block', marginTop: '0.35rem' }}>
           {delivery === 'wrapped'
@@ -442,7 +450,7 @@ export function UploadForm({ onSuccess }) {
           </span>
         )}
 
-        {delivery === 'wrapped' && receiverKeyStatus === 'found' && receiverFingerprint && (
+        {(delivery === 'wrapped' || hasRegisteredVaultKey) && receiverKeyStatus === 'found' && receiverFingerprint && (
           <div
             data-testid="receiver-fingerprint-box"
             style={{
@@ -467,7 +475,7 @@ export function UploadForm({ onSuccess }) {
           </div>
         )}
 
-        {delivery === 'wrapped' && receiverKeyStatus === 'not_found' && (
+        {delivery === 'wrapped' && !hasRegisteredVaultKey && receiverKeyStatus === 'not_found' && (
           <div
             data-testid="receiver-no-key-box"
             style={{

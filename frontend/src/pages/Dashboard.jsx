@@ -421,6 +421,7 @@ export function Dashboard() {
       {unlockingDoc && (
         <UnlockModal
           document={unlockingDoc}
+          hasVaultKey={vaultStatus === 'ready'}
           onSuccess={handleUnlockSuccess}
           onClose={() => setUnlockingDoc(null)}
         />

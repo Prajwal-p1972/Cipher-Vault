@@ -632,5 +632,57 @@ describe('UnlockModal & DocumentViewer Security and Integration Tests', () => {
         }
       }
     });
+
+    it('displays graceful fallback hint on QR scanner screen when doc is legacy QR but receiver has a vault key', async () => {
+      const qrDoc = {
+        id: 'legacy-doc-123',
+        originalName: 'old_contract.pdf',
+        delivery: 'qr',
+        receiver: TEST_RECEIVER_ID,
+        hasGeofence: false
+      };
+
+      render(
+        <UnlockModal
+          document={qrDoc}
+          hasVaultKey={true}
+          onSuccess={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+
+      // Verify QR scanner is rendered
+      expect(screen.getByTestId('mock-qr-scanner')).toBeTruthy();
+
+      // Verify exact hint text appears
+      const hint = screen.getByTestId('legacy-qr-hint');
+      expect(hint).toBeTruthy();
+      expect(hint.textContent).toContain(
+        'Note: This document was sealed using legacy QR mode before Vault Keys were established.'
+      );
+    });
+
+    it('does not display fallback hint when user has no vault key in QR mode', async () => {
+      const qrDoc = {
+        id: 'legacy-doc-123',
+        originalName: 'old_contract.pdf',
+        delivery: 'qr',
+        receiver: TEST_RECEIVER_ID,
+        hasGeofence: false
+      };
+
+      render(
+        <UnlockModal
+          document={qrDoc}
+          hasVaultKey={false}
+          onSuccess={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+
+      // Verify QR scanner is rendered but hint is absent
+      expect(screen.getByTestId('mock-qr-scanner')).toBeTruthy();
+      expect(screen.queryByTestId('legacy-qr-hint')).toBeNull();
+    });
   });
 });
