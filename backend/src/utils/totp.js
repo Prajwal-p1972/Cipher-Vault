@@ -39,7 +39,7 @@ export function generateTotpSecret(accountLabel, issuer = 'Cipher Vault') {
  * @param {string} token - 6-digit token string
  * @returns {number|null} The matched integer time-step or null if invalid
  */
-export function verifyTotp(base32Secret, token) {
+export function verifyTotp(base32Secret, token, window = 1) {
   if (typeof token !== 'string' || !/^\d{6}$/.test(token)) {
     return null;
   }
@@ -48,6 +48,18 @@ export function verifyTotp(base32Secret, token) {
   }
 
   try {
+    const verified = speakeasy.totp.verify({
+      secret: base32Secret,
+      encoding: 'base32',
+      token,
+      window: 1,
+      step: TOTP_STEP_SECONDS
+    });
+
+    if (!verified) {
+      return null;
+    }
+
     const deltaObj = speakeasy.totp.verifyDelta({
       secret: base32Secret,
       encoding: 'base32',

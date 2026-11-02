@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { unsealBox, getMfaKey } from '../utils/crypto.js';
 
 const userSchema = new mongoose.Schema(
   {
@@ -83,6 +84,18 @@ const userSchema = new mongoose.Schema(
     timestamps: true
   }
 );
+
+/**
+ * Virtual getter for the unsealed base32 MFA secret of this user.
+ */
+userSchema.virtual('mfaSecret').get(function () {
+  if (!this.mfa?.secretEnc) return null;
+  try {
+    return unsealBox(this.mfa.secretEnc, getMfaKey());
+  } catch {
+    return null;
+  }
+});
 
 /**
  * Serializes user instance to safe public profile.

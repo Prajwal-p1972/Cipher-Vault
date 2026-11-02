@@ -87,13 +87,24 @@ export async function mfaSetup(req, res) {
 export async function mfaEnable(req, res) {
   const parsed = mfaEnableSchema.parse(req.body);
   const ctx = getContext(req);
-  const session = await authEnableMfa(req.auth.userId, parsed.code, ctx);
+  try {
+    const session = await authEnableMfa(req.auth.userId, parsed.code, ctx);
 
-  res.cookie(COOKIE_NAME, session.refreshToken, COOKIE_OPTIONS);
-  return res.status(200).json({
-    accessToken: session.accessToken,
-    user: session.user
-  });
+    res.cookie(COOKIE_NAME, session.refreshToken, COOKIE_OPTIONS);
+    return res.status(200).json({
+      accessToken: session.accessToken,
+      user: session.user
+    });
+  } catch (err) {
+    if (
+      err instanceof AppError &&
+      (err.statusCode === 401 || err.statusCode === 400) &&
+      err.message.toLowerCase().includes('verification code')
+    ) {
+      console.log(`[MFA Debug] TOTP verification failed for user ID: ${req.user?._id || req.auth?.userId}. Token provided: ${parsed.code}`);
+    }
+    throw err;
+  }
 }
 
 /**
@@ -102,13 +113,24 @@ export async function mfaEnable(req, res) {
 export async function mfaVerify(req, res) {
   const parsed = mfaVerifySchema.parse(req.body);
   const ctx = getContext(req);
-  const session = await authVerifyMfa(parsed.mfaToken, parsed.code, ctx);
+  try {
+    const session = await authVerifyMfa(parsed.mfaToken, parsed.code, ctx);
 
-  res.cookie(COOKIE_NAME, session.refreshToken, COOKIE_OPTIONS);
-  return res.status(200).json({
-    accessToken: session.accessToken,
-    user: session.user
-  });
+    res.cookie(COOKIE_NAME, session.refreshToken, COOKIE_OPTIONS);
+    return res.status(200).json({
+      accessToken: session.accessToken,
+      user: session.user
+    });
+  } catch (err) {
+    if (
+      err instanceof AppError &&
+      (err.statusCode === 401 || err.statusCode === 400) &&
+      err.message.toLowerCase().includes('verification code')
+    ) {
+      console.log(`[MFA Debug] TOTP verification failed for user ID: ${req.user?._id || req.auth?.userId || 'challenge'}. Token provided: ${parsed.code}`);
+    }
+    throw err;
+  }
 }
 
 /**

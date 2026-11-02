@@ -39,16 +39,27 @@ export async function updateMyKey(req, res) {
     userAgent: req.get('user-agent')
   };
 
-  const result = await registerVaultKey(
-    {
-      userId: req.auth.userId,
-      publicKey,
-      code
-    },
-    ctx
-  );
+  try {
+    const result = await registerVaultKey(
+      {
+        userId: req.auth.userId,
+        publicKey,
+        code
+      },
+      ctx
+    );
 
-  res.status(200).json(result);
+    res.status(200).json(result);
+  } catch (err) {
+    if (
+      err instanceof AppError &&
+      (err.statusCode === 401 || err.statusCode === 400) &&
+      err.message.toLowerCase().includes('verification code')
+    ) {
+      console.log(`[MFA Debug] TOTP verification failed for user ID: ${req.user?._id || req.auth?.userId}. Token provided: ${code}`);
+    }
+    throw err;
+  }
 }
 
 /**

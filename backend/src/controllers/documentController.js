@@ -262,16 +262,30 @@ export async function openDocument(req, res) {
   const { wipe } = await import('../services/crypto/cryptoEngine.js');
   const { getStorage } = await import('../services/storage/index.js');
 
-  const { buffer, mimeType, originalName, oneTimeUse, storageKey } = await unlockDocument(
-    {
-      userId: req.auth.userId,
-      documentId: req.params.id,
-      documentKeyB64Url: documentKey,
-      code,
-      location
-    },
-    ctx
-  );
+  let unlockResult;
+  try {
+    unlockResult = await unlockDocument(
+      {
+        userId: req.auth.userId,
+        documentId: req.params.id,
+        documentKeyB64Url: documentKey,
+        code,
+        location
+      },
+      ctx
+    );
+  } catch (err) {
+    if (
+      err instanceof AppError &&
+      (err.statusCode === 401 || err.statusCode === 400) &&
+      err.message.toLowerCase().includes('verification code')
+    ) {
+      console.log(`[MFA Debug] TOTP verification failed for user ID: ${req.user?._id || req.auth?.userId}. Token provided: ${code}`);
+    }
+    throw err;
+  }
+
+  const { buffer, mimeType, originalName, oneTimeUse, storageKey } = unlockResult;
 
   const allowedMimes = ['application/pdf', 'image/jpeg', 'application/zip'];
   const contentType = allowedMimes.includes(mimeType) ? mimeType : 'application/octet-stream';

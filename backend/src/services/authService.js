@@ -291,10 +291,11 @@ export async function enableMfa(userId, code, ctx = {}) {
     throw AppError.badRequest('No pending MFA enrollment found');
   }
 
-  const base32Secret = unsealBox(user.mfa.pendingSecretEnc, getMfaKey());
+  const base32Secret = user.mfaSecret || unsealBox(user.mfa.pendingSecretEnc, getMfaKey());
   const step = verifyTotp(base32Secret, code);
 
   if (step === null) {
+    console.log(`[MFA Debug] TOTP verification failed for user ID: ${user._id}. Token provided: ${code}`);
     await recordFailure(user, 'MFA_VERIFY_FAILED', ctx);
     throw AppError.unauthorized('Invalid verification code');
   }
@@ -356,10 +357,11 @@ export async function verifyMfa(mfaToken, code, ctx = {}) {
     throw AppError.badRequest('MFA is not enabled on this account');
   }
 
-  const base32Secret = unsealBox(user.mfa.secretEnc, getMfaKey());
+  const base32Secret = user.mfaSecret || unsealBox(user.mfa.secretEnc, getMfaKey());
   const step = verifyTotp(base32Secret, code);
 
   if (step === null) {
+    console.log(`[MFA Debug] TOTP verification failed for user ID: ${user._id}. Token provided: ${code}`);
     await recordFailure(user, 'MFA_VERIFY_FAILED', ctx);
     throw AppError.unauthorized('Invalid verification code');
   }
@@ -382,6 +384,7 @@ export async function verifyMfa(mfaToken, code, ctx = {}) {
   ).exec();
 
   if (!claimedUser) {
+    console.log(`[MFA Debug] TOTP verification failed for user ID: ${user._id}. Token provided: ${code}`);
     await audit({
       actor: userId,
       action: 'MFA_VERIFY_FAILED',
@@ -435,10 +438,11 @@ export async function verifyStepUp(userId, code, ctx = {}) {
     throw AppError.badRequest('MFA is not enabled on this account');
   }
 
-  const base32Secret = unsealBox(user.mfa.secretEnc, getMfaKey());
+  const base32Secret = user.mfaSecret || unsealBox(user.mfa.secretEnc, getMfaKey());
   const step = verifyTotp(base32Secret, code);
 
   if (step === null) {
+    console.log(`[MFA Debug] TOTP verification failed for user ID: ${user._id}. Token provided: ${code}`);
     await recordFailure(user, 'MFA_VERIFY_FAILED', ctx);
     throw AppError.unauthorized('Invalid verification code');
   }
@@ -460,6 +464,7 @@ export async function verifyStepUp(userId, code, ctx = {}) {
   ).exec();
 
   if (!claimedUser) {
+    console.log(`[MFA Debug] TOTP verification failed for user ID: ${user._id}. Token provided: ${code}`);
     await audit({
       actor: userId,
       action: 'MFA_VERIFY_FAILED',
