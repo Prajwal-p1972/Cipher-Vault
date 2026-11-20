@@ -95,16 +95,18 @@ export function ChatPanel({ session }) {
       aria-label="Local Document Chat"
       className="preserve-3d"
       style={{
-        marginTop: '1.25rem',
-        backgroundColor: '#0a0f1d',
-        border: '1px solid rgba(168, 85, 247, 0.4)',
-        boxShadow: '0 12px 30px -5px rgba(0, 0, 0, 0.8), 0 0 16px rgba(168, 85, 247, 0.2)',
+        marginTop: '0.75rem',
+        backgroundColor: 'rgba(10, 15, 29, 0.95)',
+        border: '1px solid rgba(168, 85, 247, 0.35)',
+        boxShadow: '0 16px 36px -5px rgba(0, 0, 0, 0.85), 0 0 20px rgba(168, 85, 247, 0.15)',
         borderRadius: '12px',
         padding: '1.25rem',
         display: 'flex',
         flexDirection: 'column',
-        gap: '0.85rem',
-        color: '#f8fafc'
+        gap: '0.9rem',
+        color: '#f8fafc',
+        height: '100%',
+        minHeight: '480px'
       }}
     >
       {/* Panel Header */}
@@ -114,7 +116,7 @@ export function ChatPanel({ session }) {
           alignItems: 'center',
           justifyContent: 'space-between',
           borderBottom: '1px solid rgba(139, 92, 246, 0.25)',
-          paddingBottom: '0.65rem'
+          paddingBottom: '0.75rem'
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
@@ -124,11 +126,11 @@ export function ChatPanel({ session }) {
             <div className="neural-orb-core" />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.01em' }}>
+            <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.01em' }}>
               Ask Document Questions
             </h4>
             <span className="model-badge-3d">
-              <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#8b5cf6' }} />
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10b981', boxShadow: '0 0 8px #10b981' }} />
               Llama 3 • Offline RAG
             </span>
           </div>
@@ -141,9 +143,10 @@ export function ChatPanel({ session }) {
           className="btn-3d-danger"
           style={{
             fontSize: '0.75rem',
-            padding: '0.3rem 0.75rem',
+            padding: '0.35rem 0.8rem',
+            borderRadius: '6px',
             cursor: messages.length === 0 && !isStreaming ? 'not-allowed' : 'pointer',
-            opacity: messages.length === 0 && !isStreaming ? 0.5 : 1
+            opacity: messages.length === 0 && !isStreaming ? 0.45 : 1
           }}
         >
           Clear chat
@@ -163,7 +166,7 @@ export function ChatPanel({ session }) {
             opacity: isStreaming || !session ? 0.5 : 1
           }}
         >
-          Summarize document
+          📝 Summarize document
         </button>
         <button
           type="button"
@@ -176,36 +179,60 @@ export function ChatPanel({ session }) {
             opacity: isStreaming || !session ? 0.5 : 1
           }}
         >
-          Detailed summary
+          📑 Detailed summary
+        </button>
+        <button
+          type="button"
+          onClick={() => handleQuickAsk('What are the main key points and risks in this document?', 'auto')}
+          disabled={isStreaming || !session}
+          aria-label="Key Points"
+          className="quick-action-3d-chip"
+          style={{
+            cursor: isStreaming || !session ? 'not-allowed' : 'pointer',
+            opacity: isStreaming || !session ? 0.5 : 1
+          }}
+        >
+          🔍 Key Points &amp; Risks
         </button>
       </div>
 
       {/* Message List Container with Scroll Freeze Prevention */}
-      <div style={{ position: 'relative' }}>
+      <div style={{ position: 'relative', flex: 1, minHeight: '260px', display: 'flex', flexDirection: 'column' }}>
         <div
           ref={messageListRef}
           onScroll={handleScroll}
           style={{
-            maxHeight: '360px',
-            minHeight: '160px',
+            flex: 1,
+            maxHeight: '440px',
+            minHeight: '220px',
             overflowY: 'auto',
             overscrollBehavior: 'contain',
             display: 'flex',
             flexDirection: 'column',
-            gap: '0.75rem',
-            padding: '0.5rem 0.25rem'
+            gap: '0.85rem',
+            padding: '0.75rem 0.4rem'
           }}
         >
           {messages.length === 0 ? (
             <div
               style={{
                 color: '#64748b',
-                fontSize: '0.825rem',
+                fontSize: '0.85rem',
                 textAlign: 'center',
-                padding: '1.5rem 0'
+                padding: '2.5rem 1rem',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '0.65rem'
               }}
             >
-              Ask questions about the content of this document. Answers are generated entirely offline.
+              <div style={{ fontSize: '2rem', opacity: 0.8 }}>💬</div>
+              <div style={{ fontWeight: 600, color: '#94a3b8' }}>
+                Document Ingested in Memory
+              </div>
+              <div style={{ maxWidth: '320px', lineHeight: 1.45, fontSize: '0.8rem' }}>
+                Ask anything about this document. Questions and answers are analyzed locally by Llama 3 with verified page citations.
+              </div>
             </div>
           ) : (
             messages.map((m) => (
@@ -213,7 +240,7 @@ export function ChatPanel({ session }) {
                 key={m.id}
                 style={{
                   alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-                  maxWidth: '85%',
+                  maxWidth: '88%',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '0.35rem'
@@ -221,12 +248,15 @@ export function ChatPanel({ session }) {
               >
                 <div
                   style={{
-                    fontSize: '0.7rem',
-                    fontWeight: 600,
-                    color: m.role === 'user' ? '#38bdf8' : '#a78bfa'
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    color: m.role === 'user' ? '#38bdf8' : '#c084fc'
                   }}
                 >
-                  {m.role === 'user' ? 'You' : 'Local AI'}
+                  <span>{m.role === 'user' ? '👤 You' : '🤖 Cipher AI (Llama 3)'}</span>
                 </div>
 
                 {/* Multi-step summarization progress indicator */}
@@ -248,14 +278,15 @@ export function ChatPanel({ session }) {
                 <div
                   className={m.role === 'user' ? 'chat-bubble-3d-user' : 'chat-bubble-3d-ai'}
                   style={{
-                    padding: '0.65rem 0.85rem',
-                    borderRadius: '8px',
-                    fontSize: '0.85rem',
-                    lineHeight: 1.5,
+                    padding: '0.75rem 0.95rem',
+                    borderRadius: '10px',
+                    fontSize: '0.88rem',
+                    lineHeight: 1.55,
                     whiteSpace: 'pre-wrap',
                     wordBreak: 'break-word',
                     color: '#f8fafc',
-                    border: m.error ? '1px solid #ef4444' : undefined
+                    border: m.error ? '1px solid #ef4444' : undefined,
+                    boxShadow: m.role === 'user' ? '0 4px 12px rgba(2, 132, 199, 0.25)' : '0 4px 16px rgba(0, 0, 0, 0.5)'
                   }}
                 >
                   {m.text}
@@ -264,12 +295,13 @@ export function ChatPanel({ session }) {
                       aria-hidden="true"
                       style={{
                         display: 'inline-block',
-                        width: '6px',
-                        height: '14px',
+                        width: '7px',
+                        height: '15px',
                         backgroundColor: '#38bdf8',
-                        marginLeft: '4px',
+                        marginLeft: '5px',
                         verticalAlign: 'text-bottom',
-                        animation: 'pulse 1s infinite'
+                        animation: 'pulse 1s infinite',
+                        borderRadius: '1px'
                       }}
                     />
                   )}
@@ -284,7 +316,8 @@ export function ChatPanel({ session }) {
                       gap: '0.35rem',
                       flexWrap: 'wrap',
                       fontSize: '0.75rem',
-                      color: '#94a3b8'
+                      color: '#94a3b8',
+                      marginTop: '0.1rem'
                     }}
                   >
                     <span style={{ fontWeight: 600 }}>Sources:</span>
@@ -299,6 +332,15 @@ export function ChatPanel({ session }) {
                         key={s.page ?? idx}
                         data-testid="page-chip"
                         className="citation-pill-3d"
+                        style={{
+                          backgroundColor: 'rgba(168, 85, 247, 0.15)',
+                          border: '1px solid rgba(168, 85, 247, 0.35)',
+                          color: '#d8b4fe',
+                          padding: '0.15rem 0.45rem',
+                          borderRadius: '4px',
+                          fontSize: '0.72rem',
+                          fontWeight: 600
+                        }}
                       >
                         p.{s.page}
                       </span>
@@ -328,10 +370,10 @@ export function ChatPanel({ session }) {
               fontSize: '0.75rem',
               fontWeight: 700,
               borderRadius: '9999px',
-              backgroundColor: 'rgba(15, 23, 42, 0.9)',
+              backgroundColor: 'rgba(15, 23, 42, 0.95)',
               color: '#38bdf8',
               border: '1px solid rgba(56, 189, 248, 0.5)',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5), 0 0 10px rgba(56, 189, 248, 0.25)',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.6), 0 0 10px rgba(56, 189, 248, 0.25)',
               cursor: 'pointer',
               zIndex: 10
             }}
@@ -376,20 +418,32 @@ export function ChatPanel({ session }) {
         <div
           role="alert"
           style={{
-            backgroundColor: '#450a0a',
-            border: '1px solid #7f1d1d',
-            borderRadius: '4px',
-            padding: '0.5rem 0.75rem',
+            backgroundColor: 'rgba(69, 10, 10, 0.8)',
+            border: '1px solid rgba(239, 68, 68, 0.4)',
+            borderRadius: '6px',
+            padding: '0.55rem 0.85rem',
             fontSize: '0.8rem',
-            color: '#fca5a5'
+            color: '#fca5a5',
+            lineHeight: 1.4
           }}
         >
           {error}
         </div>
       )}
 
-      {/* Input & Action Bar */}
-      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
+      {/* Modern Floating Input Dock */}
+      <div
+        style={{
+          display: 'flex',
+          gap: '0.65rem',
+          alignItems: 'flex-end',
+          backgroundColor: 'rgba(15, 23, 42, 0.8)',
+          border: '1px solid rgba(56, 189, 248, 0.3)',
+          borderRadius: '10px',
+          padding: '0.5rem 0.65rem',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)'
+        }}
+      >
         <textarea
           ref={textareaRef}
           value={input}
@@ -400,15 +454,17 @@ export function ChatPanel({ session }) {
           rows={2}
           maxLength={1000}
           aria-label="Question"
-          className="input-3d-well"
           style={{
             flex: 1,
-            borderRadius: '8px',
-            padding: '0.6rem 0.85rem',
-            fontSize: '0.85rem',
+            backgroundColor: 'transparent',
+            border: 'none',
+            color: '#f8fafc',
+            padding: '0.35rem 0.45rem',
+            fontSize: '0.86rem',
             resize: 'none',
             outline: 'none',
-            fontFamily: 'inherit'
+            fontFamily: 'inherit',
+            lineHeight: 1.45
           }}
         />
 
@@ -419,11 +475,12 @@ export function ChatPanel({ session }) {
             aria-label="Stop generation"
             className="btn-3d-danger"
             style={{
-              padding: '0.5rem 1.15rem',
-              fontWeight: 600,
-              fontSize: '0.85rem',
+              padding: '0.55rem 1.15rem',
+              fontWeight: 700,
+              fontSize: '0.82rem',
               cursor: 'pointer',
-              height: '42px'
+              height: '38px',
+              borderRadius: '8px'
             }}
           >
             Stop
@@ -436,15 +493,20 @@ export function ChatPanel({ session }) {
             aria-label="Send question"
             className="btn-3d-cyber"
             style={{
-              padding: '0.5rem 1.25rem',
-              fontWeight: 600,
+              padding: '0.55rem 1.15rem',
+              fontWeight: 700,
               fontSize: '0.85rem',
               cursor: !input.trim() ? 'not-allowed' : 'pointer',
-              opacity: !input.trim() ? 0.5 : 1,
-              height: '42px'
+              opacity: !input.trim() ? 0.4 : 1,
+              height: '38px',
+              borderRadius: '8px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem'
             }}
           >
-            Send
+            <span>Send</span>
+            <span>➤</span>
           </button>
         )}
       </div>

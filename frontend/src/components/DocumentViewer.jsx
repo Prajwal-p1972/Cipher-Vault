@@ -29,6 +29,7 @@ export function DocumentViewer({ blob: initialBlob, contentType, originalName, o
   const [timeRemainingSeconds, setTimeRemainingSeconds] = useState(600);
   const [activeMobileTab, setActiveMobileTab] = useState('doc'); // 'doc' | 'ai'
   const [showAiDesktop, setShowAiDesktop] = useState(true);
+  const [isAiExpanded, setIsAiExpanded] = useState(false);
   const [isWideScreen, setIsWideScreen] = useState(
     typeof window !== 'undefined' ? (window.innerWidth >= 1024 || window.innerWidth === 0) : true
   );
@@ -230,22 +231,46 @@ export function DocumentViewer({ blob: initialBlob, contentType, originalName, o
 
           {/* Desktop Toggle Button */}
           {isWideScreen && (
-            <button
-              type="button"
-              onClick={() => setShowAiDesktop((prev) => !prev)}
-              className="btn btn-secondary btn-3d-cyber"
-              style={{
-                padding: '0.4rem 0.85rem',
-                fontSize: '0.8rem',
-                width: 'auto',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.4rem'
-              }}
-            >
-              <span>🤖</span>
-              <span>{showAiDesktop ? 'Hide AI Assistant' : 'Show AI Assistant'}</span>
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => setShowAiDesktop((prev) => !prev)}
+                className="btn btn-secondary btn-3d-cyber"
+                style={{
+                  padding: '0.4rem 0.85rem',
+                  fontSize: '0.8rem',
+                  width: 'auto',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem'
+                }}
+              >
+                <span>🤖</span>
+                <span>{showAiDesktop ? 'Hide AI Assistant' : 'Show AI Assistant'}</span>
+              </button>
+
+              {showAiDesktop && (
+                <button
+                  type="button"
+                  onClick={() => setIsAiExpanded((prev) => !prev)}
+                  className="btn btn-secondary"
+                  style={{
+                    padding: '0.4rem 0.85rem',
+                    fontSize: '0.8rem',
+                    width: 'auto',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    backgroundColor: isAiExpanded ? 'rgba(168, 85, 247, 0.25)' : 'rgba(15, 23, 42, 0.7)',
+                    color: isAiExpanded ? '#c084fc' : '#94a3b8',
+                    border: isAiExpanded ? '1px solid rgba(168, 85, 247, 0.4)' : '1px solid rgba(148, 163, 184, 0.2)'
+                  }}
+                  title={isAiExpanded ? 'Switch to Split View' : 'Expand AI Chat Panel'}
+                >
+                  <span>{isAiExpanded ? '🗗 Split View' : '🗖 Expand AI'}</span>
+                </button>
+              )}
+            </>
           )}
 
           <button
@@ -458,9 +483,9 @@ export function DocumentViewer({ blob: initialBlob, contentType, originalName, o
             <div
               data-testid="ai-pane"
               style={{
-                flex: isWideScreen ? '0 0 460px' : '1 1 auto',
-                maxWidth: isWideScreen ? '45%' : '100%',
-                minWidth: isWideScreen ? '360px' : 0,
+                flex: isWideScreen ? (isAiExpanded ? '1 1 58%' : '0 0 520px') : '1 1 auto',
+                maxWidth: isWideScreen ? (isAiExpanded ? '65%' : '48%') : '100%',
+                minWidth: isWideScreen ? '400px' : 0,
                 minHeight: 0,
                 height: '100%',
                 overflowY: 'auto',
@@ -470,10 +495,16 @@ export function DocumentViewer({ blob: initialBlob, contentType, originalName, o
                 borderLeft: isWideScreen && showAiDesktop ? '1px solid rgba(56, 189, 248, 0.2)' : 'none',
                 display: isWideScreen
                   ? (showAiDesktop ? 'block' : 'none')
-                  : (activeMobileTab === 'ai' ? 'block' : 'none')
+                  : (activeMobileTab === 'ai' ? 'block' : 'none'),
+                transition: 'flex 0.2s ease, max-width 0.2s ease'
               }}
             >
-              <LocalAiPanel blob={blob} ai={localAi} />
+              <LocalAiPanel
+                blob={blob}
+                ai={localAi}
+                isExpanded={isAiExpanded}
+                onToggleExpand={() => setIsAiExpanded((prev) => !prev)}
+              />
             </div>
           </>
         )}

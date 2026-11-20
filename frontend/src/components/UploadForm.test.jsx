@@ -513,9 +513,8 @@ describe('UploadForm Component Tests', () => {
       const radiusInput = screen.getByLabelText(/Allowed Unlock Radius/i);
       expect(radiusInput.value).toBe('5000');
 
-      // Click 2 Attempts button
-      const attempts2Btn = screen.getByRole('button', { name: /2 Attempts/i });
-      fireEvent.click(attempts2Btn);
+      // Verify 3 Attempts default protection
+      expect(screen.getByText(/3 Attempts \(Default\)/i)).toBeTruthy();
 
       Object.defineProperty(navigator, 'geolocation', {
         value: origGeo,

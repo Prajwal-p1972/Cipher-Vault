@@ -17,7 +17,7 @@ import { ChatPanel } from './ChatPanel.jsx';
  *   onResetRef?: React.MutableRefObject<(() => Promise<void>) | null>
  * }} props
  */
-export function LocalAiPanel({ blob, ai: externalAi, onResetRef, style = {} }) {
+export function LocalAiPanel({ blob, ai: externalAi, onResetRef, isExpanded = false, onToggleExpand, style = {} }) {
   const internalAi = useLocalAi();
   const ai = externalAi || internalAi;
 
@@ -41,35 +41,121 @@ export function LocalAiPanel({ blob, ai: externalAi, onResetRef, style = {} }) {
       role="region"
       aria-label="Local AI Analysis"
       style={{
-        backgroundColor: '#0f172a',
-        border: '1px solid #334155',
-        borderRadius: '8px',
+        background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.95) 0%, rgba(10, 15, 29, 0.98) 100%)',
+        border: '1px solid rgba(56, 189, 248, 0.25)',
+        boxShadow: '0 12px 30px -5px rgba(0, 0, 0, 0.8), 0 0 16px rgba(56, 189, 248, 0.15)',
+        borderRadius: '12px',
         padding: '1.25rem',
         margin: 0,
         color: '#f8fafc',
         width: '100%',
         maxWidth: '100%',
         boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
         ...style
       }}
     >
-      {/* Header & Privacy Notice */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-        <span style={{ fontSize: '1.25rem' }}>&#129302;</span>
-        <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 600 }}>Local AI Document Analysis</h3>
+      {/* Header & Controls */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '0.5rem',
+          marginBottom: '0.85rem',
+          paddingBottom: '0.65rem',
+          borderBottom: '1px solid rgba(56, 189, 248, 0.15)',
+          flexWrap: 'wrap'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          <div
+            style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '8px',
+              background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.2) 0%, rgba(168, 85, 247, 0.2) 100%)',
+              border: '1px solid rgba(56, 189, 248, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.1rem'
+            }}
+          >
+            🤖
+          </div>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.01em' }}>
+              Local AI Intelligence
+            </h3>
+            <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+              Zero-Leakage In-Memory Analysis
+            </span>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              padding: '0.2rem 0.55rem',
+              borderRadius: '9999px',
+              backgroundColor: state === 'offline' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+              color: state === 'offline' ? '#fca5a5' : '#34d399',
+              border: state === 'offline' ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)'
+            }}
+          >
+            <span
+              style={{
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                backgroundColor: state === 'offline' ? '#ef4444' : '#10b981'
+              }}
+            />
+            {state === 'offline' ? 'Service Offline' : state === 'indexed' ? 'Indexed in RAM' : 'Engine Ready'}
+          </span>
+
+          {onToggleExpand && (
+            <button
+              type="button"
+              onClick={onToggleExpand}
+              style={{
+                background: 'rgba(30, 41, 59, 0.8)',
+                border: '1px solid rgba(148, 163, 184, 0.25)',
+                color: '#94a3b8',
+                borderRadius: '6px',
+                padding: '0.25rem 0.6rem',
+                fontSize: '0.72rem',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.25rem'
+              }}
+              title={isExpanded ? 'Shrink to standard split' : 'Expand chat width'}
+            >
+              {isExpanded ? '🗗 Split' : '🗖 Expand'}
+            </button>
+          )}
+        </div>
       </div>
 
       <div
         role="note"
         style={{
-          backgroundColor: '#1e293b',
-          border: '1px solid #334155',
-          borderRadius: '6px',
-          padding: '0.75rem',
-          fontSize: '0.8rem',
+          backgroundColor: 'rgba(30, 41, 59, 0.5)',
+          border: '1px solid rgba(56, 189, 248, 0.15)',
+          borderRadius: '8px',
+          padding: '0.65rem 0.85rem',
+          fontSize: '0.78rem',
           color: '#94a3b8',
           lineHeight: 1.45,
-          marginBottom: '1rem'
+          marginBottom: '0.9rem'
         }}
       >
         Analysis runs on this computer. The decrypted file is sent only to 127.0.0.1 and is deleted from the AI service when you close this window or after 30 idle minutes.
@@ -77,27 +163,45 @@ export function LocalAiPanel({ blob, ai: externalAi, onResetRef, style = {} }) {
 
       {/* Action / Trigger */}
       {state !== 'indexed' && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
           <button
             type="button"
             onClick={handleAnalyze}
             disabled={isBusy || !blob}
-            className="btn btn-primary"
+            className="btn btn-primary btn-3d-cyber"
             style={{
-              padding: '0.5rem 1.25rem',
-              fontSize: '0.9rem',
-              fontWeight: 600,
+              padding: '0.75rem 1.25rem',
+              fontSize: '0.92rem',
+              fontWeight: 700,
               cursor: isBusy || !blob ? 'not-allowed' : 'pointer',
-              opacity: isBusy || !blob ? 0.6 : 1
+              opacity: isBusy || !blob ? 0.6 : 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              boxShadow: '0 0 20px rgba(56, 189, 248, 0.2)'
             }}
           >
-            {isBusy ? 'Processing...' : 'Analyze with local AI'}
+            <span>{isBusy ? '⚡' : '✨'}</span>
+            <span>{isBusy ? 'Indexing Document in Local Memory...' : 'Analyze with local AI'}</span>
           </button>
 
           {isBusy && (
-            <span style={{ fontSize: '0.85rem', color: '#38bdf8' }}>
-              {state === 'checking' ? 'Checking local AI service...' : 'Analyzing document in local memory...'}
-            </span>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                fontSize: '0.82rem',
+                color: '#38bdf8',
+                padding: '0.4rem 0.6rem',
+                backgroundColor: 'rgba(56, 189, 248, 0.08)',
+                borderRadius: '6px'
+              }}
+            >
+              <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
+              <span>{state === 'checking' ? 'Connecting to local AI microservice...' : 'Extracting text and building vector index...'}</span>
+            </div>
           )}
         </div>
       )}
@@ -107,22 +211,22 @@ export function LocalAiPanel({ blob, ai: externalAi, onResetRef, style = {} }) {
         <div
           role="alert"
           style={{
-            marginTop: '1rem',
-            padding: '1rem',
-            backgroundColor: '#451a03',
-            border: '1px solid #78350f',
-            borderRadius: '6px',
+            marginTop: '0.85rem',
+            padding: '0.9rem 1rem',
+            backgroundColor: 'rgba(69, 26, 3, 0.7)',
+            border: '1px solid rgba(245, 158, 11, 0.4)',
+            borderRadius: '8px',
             color: '#fef3c7'
           }}
         >
-          <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-            Local AI Service Unavailable
+          <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: '0.35rem', color: '#fbbf24' }}>
+            ⚠️ Local AI Service Unavailable
           </div>
-          <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.825rem' }}>
+          <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.8rem', color: '#fde68a', lineHeight: 1.4 }}>
             {error || 'The local AI microservice is offline or model weights are missing.'}
           </p>
-          <div style={{ fontSize: '0.8rem', color: '#fde68a', marginBottom: '0.25rem' }}>
-            To launch the local microservice on your computer:
+          <div style={{ fontSize: '0.76rem', color: '#fef08a', marginBottom: '0.35rem' }}>
+            Start the service with one command:
           </div>
           <pre
             style={{
@@ -130,9 +234,9 @@ export function LocalAiPanel({ blob, ai: externalAi, onResetRef, style = {} }) {
               padding: '0.5rem 0.75rem',
               backgroundColor: '#1c1917',
               border: '1px solid #44403c',
-              borderRadius: '4px',
+              borderRadius: '6px',
               fontFamily: 'monospace',
-              fontSize: '0.8rem',
+              fontSize: '0.78rem',
               overflowX: 'auto',
               color: '#a3e635'
             }}

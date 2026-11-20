@@ -807,41 +807,40 @@ export function UploadForm({ onSuccess }) {
           </span>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.85rem' }}>
-          {/* Max Failed Attempts Selector */}
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label htmlFor={maxAttemptsInputId} className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f1f5f9', display: 'block', marginBottom: '0.3rem' }}>
-              Max Attempts Before Self-Destruct
-            </label>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              {['2', '3'].map((att) => {
-                const isSelected = String(maxFailedAttempts) === att;
-                return (
-                  <button
-                    key={att}
-                    type="button"
-                    onClick={() => setMaxFailedAttempts(att)}
-                    style={{
-                      flex: 1,
-                      padding: '0.5rem',
-                      fontSize: '0.8rem',
-                      fontWeight: 700,
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      border: isSelected ? '1px solid #F43F5E' : '1px solid rgba(244, 63, 94, 0.25)',
-                      backgroundColor: isSelected ? 'rgba(244, 63, 94, 0.22)' : 'rgba(15, 23, 42, 0.7)',
-                      color: isSelected ? '#FDA4AF' : '#94a3b8',
-                      boxShadow: isSelected ? '0 0 10px rgba(244, 63, 94, 0.25)' : 'none',
-                      transition: 'all 0.15s ease'
-                    }}
-                  >
-                    {att} Attempts {att === '3' ? '(Default)' : ''}
-                  </button>
-                );
-              })}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '0.85rem' }}>
+          {/* Default 3-Attempt Intrusion Badge */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: 'rgba(15, 23, 42, 0.6)',
+              border: '1px solid rgba(244, 63, 94, 0.25)',
+              borderRadius: '6px',
+              padding: '0.55rem 0.85rem'
+            }}
+          >
+            <div>
+              <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#f1f5f9' }}>
+                Auto Self-Destruct Protection
+              </div>
+              <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
+                Permanent crypto-shredding occurs upon reaching 3 failed unlock attempts.
+              </div>
             </div>
-            <span style={{ fontSize: '0.74rem', color: '#94a3b8', display: 'block', marginTop: '0.35rem' }}>
-              Permanent crypto-shredding occurs upon reaching this limit.
+            <span
+              style={{
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                color: '#FDA4AF',
+                backgroundColor: 'rgba(244, 63, 94, 0.15)',
+                border: '1px solid rgba(244, 63, 94, 0.3)',
+                borderRadius: '9999px',
+                padding: '0.2rem 0.65rem',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              3 Attempts (Default)
             </span>
           </div>
 
@@ -860,7 +859,7 @@ export function UploadForm({ onSuccess }) {
               className="form-input"
             />
             <span style={{ fontSize: '0.74rem', color: '#94a3b8', display: 'block', marginTop: '0.35rem' }}>
-              SMS intrusion alerts dispatched immediately upon breach.
+              SMS intrusion alerts dispatched immediately upon breach detection.
             </span>
           </div>
         </div>
