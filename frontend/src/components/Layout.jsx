@@ -223,7 +223,7 @@ export function Layout({
             </div>
             <div className="hud-pill">
               <span className="hud-dot" style={{ backgroundColor: '#8b5cf6', color: '#8b5cf6' }} />
-              <span>Local LLM: <strong style={{ color: '#c084fc' }}>Offline Neural Engine</strong></span>
+              <span>Local LLM: <strong style={{ color: '#c084fc' }}>Loopback (Offline)</strong></span>
             </div>
           </div>
         </div>

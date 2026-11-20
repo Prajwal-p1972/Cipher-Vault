@@ -30,15 +30,40 @@ if (isTestEnv) {
   process.env.AWS_S3_BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME || 'mock-cipher-vault-bucket';
 }
 
+// Fallback: If JWT_SECRET is provided without explicit access/refresh secrets (e.g. Render config),
+// derive compatible 32+ character secrets to prevent startup crashes.
+if (process.env.JWT_SECRET) {
+  if (!process.env.JWT_ACCESS_SECRET) {
+    process.env.JWT_ACCESS_SECRET = process.env.JWT_SECRET.length >= 32
+      ? process.env.JWT_SECRET
+      : `${process.env.JWT_SECRET}_access_key_padding_min_32_chars`;
+  }
+  if (!process.env.JWT_REFRESH_SECRET) {
+    const derivedRefresh = `${process.env.JWT_SECRET}_refresh_key_padding_min_32_chars`;
+    process.env.JWT_REFRESH_SECRET = derivedRefresh;
+  }
+}
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(5000),
   MONGO_URI: z.string().min(1, 'MONGO_URI is required'),
   CLIENT_ORIGIN: z.string().min(1, 'CLIENT_ORIGIN is required'),
+  JWT_SECRET: z.string().optional(),
   JWT_ACCESS_SECRET: z.string().min(32, 'JWT_ACCESS_SECRET must be at least 32 characters'),
   JWT_REFRESH_SECRET: z.string().min(32, 'JWT_REFRESH_SECRET must be at least 32 characters'),
   MFA_ENC_KEY: z.string().regex(/^[0-9a-fA-F]{64}$/, 'MFA_ENC_KEY must be exactly 64 hex characters (32 bytes)'),
   AUDIT_HMAC_KEY: z.string().min(32, 'AUDIT_HMAC_KEY must be at least 32 characters'),
+  COOKIE_SAMESITE: z.enum(['strict', 'lax', 'none']).optional(),
+  // Optional multi-channel breach alerting integrations
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().optional(),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().optional(),
+  TWILIO_ACCOUNT_SID: z.string().optional(),
+  TWILIO_AUTH_TOKEN: z.string().optional(),
+  TWILIO_FROM_PHONE: z.string().optional(),
   // Obsolete AWS streaming config (retained as optional for backwards-compat)
   AWS_REGION: z.string().optional(),
   AWS_ACCESS_KEY_ID: z.string().optional(),

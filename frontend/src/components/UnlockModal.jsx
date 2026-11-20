@@ -306,11 +306,15 @@ export function UnlockModal({ document: doc, hasVaultKey, onSuccess, onClose }) 
         } else if (status === 410) {
           if (errorCode === 'consumed') {
             setSubmitError('This one-time document has already been opened and destroyed.');
+          } else if (errorCode === 'destroyed') {
+            setSubmitError('🚨 CRITICAL: This document has been permanently crypto-shredded and destroyed due to repeated security policy violations.');
           } else {
             setSubmitError('This document has expired and can no longer be accessed.');
           }
         } else if (status === 403) {
-          if (errorCode === 'integrity') {
+          if (errorCode === 'document_destroyed') {
+            setSubmitError('🚨 CRITICAL: Maximum failed attempts exceeded! This document has been permanently crypto-shredded and destroyed.');
+          } else if (errorCode === 'integrity') {
             setSubmitError(isWrapped ? 'Decryption key integrity check failed.' : 'Unable to open this document with this QR.');
           } else if (errorCode === 'outside_area') {
             setSubmitError('Access denied: You are outside the authorized geographic area for this document.');

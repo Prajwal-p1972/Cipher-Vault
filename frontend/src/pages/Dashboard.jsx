@@ -60,7 +60,7 @@ export function Dashboard() {
   useEffect(() => {
     if (!socketCtx || typeof socketCtx.on !== 'function') return;
 
-    const unsubscribe = socketCtx.on('document:sealed', (payload) => {
+    const unsubscribeSealed = socketCtx.on('document:sealed', (payload) => {
       if (!payload) return;
 
       // 1. Add to received documents list (de-duplicated by useDocuments)
@@ -89,10 +89,40 @@ export function Dashboard() {
       setUnreadCount((c) => c + 1);
     });
 
+    const unsubscribeBreach = socketCtx.on('document:breach_alert', (payload) => {
+      if (!payload) return;
+      const docName = payload.originalName || 'a document';
+      const toastMessage = `⚠️ Breach Warning: Unauthorized attempt on "${docName}" (${payload.failedAttempts}/${payload.maxFailedAttempts || 3})`;
+      const toastId = `breach-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+      setToasts((prev) => [...prev, { id: toastId, message: toastMessage, type: 'warning' }]);
+      setTimeout(() => {
+        dismissToast(toastId);
+      }, 8000);
+
+      refresh();
+    });
+
+    const unsubscribeDestroyed = socketCtx.on('document:destroyed', (payload) => {
+      if (!payload) return;
+      const docName = payload.originalName || 'a document';
+      const toastMessage = `⚡ INTRUSION DEFENSE: Document "${docName}" was CRYPTO-SHREDDED after exceeding max attempts!`;
+      const toastId = `destroy-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+      setToasts((prev) => [...prev, { id: toastId, message: toastMessage, type: 'danger' }]);
+      setTimeout(() => {
+        dismissToast(toastId);
+      }, 10000);
+
+      refresh();
+    });
+
     return () => {
-      unsubscribe();
+      if (typeof unsubscribeSealed === 'function') unsubscribeSealed();
+      if (typeof unsubscribeBreach === 'function') unsubscribeBreach();
+      if (typeof unsubscribeDestroyed === 'function') unsubscribeDestroyed();
     };
-  }, [socketCtx, addReceived, dismissToast]);
+  }, [socketCtx, addReceived, dismissToast, refresh]);
 
   const handleUploadSuccess = ({ document, documentKey }) => {
     refresh();
@@ -401,6 +431,8 @@ export function Dashboard() {
             {activeTab === 'upload' && (
               <TiltCard3D
                 variant="cyan"
+                maxTilt={0}
+                glare={false}
                 style={{
                   maxWidth: '680px',
                   margin: '0 auto',

@@ -6,6 +6,7 @@ import { openDocumentToBuffer as defaultOpenDocumentToBuffer } from './documentS
 import { evaluatePolicy } from './accessPolicy.js';
 import { AppError } from '../utils/errors.js';
 import { wipe as defaultWipe } from './crypto/cryptoEngine.js';
+import { sendBreachAlert as defaultSendBreachAlert } from './alertService.js';
 
 /**
  * Resolves dependency bundle for unlockDocument with support for unit test injection.
@@ -19,8 +20,98 @@ function resolveDependencies(customDeps = {}) {
     openDocumentToBuffer: customDeps.openDocumentToBuffer || defaultOpenDocumentToBuffer,
     wipe: customDeps.wipe || defaultWipe,
     clock: customDeps.clock || (() => new Date()),
+    sendBreachAlert: customDeps.sendBreachAlert || defaultSendBreachAlert,
     ...customDeps
   };
+}
+
+/**
+ * Records intrusion attempts, increments failed attempts counter, and triggers
+ * automated crypto-shredding self-destruction once maxFailedAttempts is reached.
+ *
+ * @param {object} doc - Document object
+ * @param {object} params - Incident details
+ * @returns {Promise<{ isDestroyed: boolean, newFailedAttempts: number, maxAttempts: number, remaining: number }>}
+ */
+async function recordFailedAttemptAndCheckShred(doc, { reason, userId, attemptedLat, attemptedLng, distanceMeters, ctx, deps }) {
+  const maxAttempts = doc?.maxFailedAttempts || 3;
+  const newFailedAttempts = (doc?.failedAttempts || 0) + 1;
+  const isDestroyed = newFailedAttempts >= maxAttempts;
+  const remaining = Math.max(0, maxAttempts - newFailedAttempts);
+
+  const intrusionEntry = {
+    attemptedAt: new Date(),
+    attemptedByUserId: userId || null,
+    attemptedByEmail: ctx?.userEmail || null,
+    ipAddress: ctx?.ip || null,
+    reason,
+    attemptedLat: attemptedLat ?? null,
+    attemptedLng: attemptedLng ?? null,
+    distanceMeters: distanceMeters ?? null
+  };
+
+  const updateFields = {
+    $inc: { failedAttempts: 1 },
+    $push: { intrusionLog: intrusionEntry }
+  };
+
+  if (isDestroyed) {
+    const destructionReason = `Exceeded maximum failed access attempts (${newFailedAttempts}/${maxAttempts}) - Triggered by: ${reason}`;
+    updateFields.$set = {
+      status: 'destroyed',
+      destroyedAt: new Date(),
+      destructionReason
+    };
+
+    // Crypto-shred the ciphertext storage blob!
+    try {
+      if (doc?.storage?.key && deps.storage && typeof deps.storage.delete === 'function') {
+        await deps.storage.delete(doc.storage.key);
+      }
+    } catch (storageErr) {
+      console.error('[Storage Shred Warning]:', storageErr.message);
+    }
+  }
+
+  // Persist to database
+  try {
+    if (doc?._id && deps.Document && typeof deps.Document.findOneAndUpdate === 'function') {
+      const updateQuery = deps.Document.findOneAndUpdate({ _id: doc._id }, updateFields, { new: true });
+      if (updateQuery && typeof updateQuery.exec === 'function') {
+        await updateQuery.exec();
+      } else {
+        await updateQuery;
+      }
+    }
+  } catch (dbErr) {
+    console.error('[Document Failed Attempt Update Warning]:', dbErr.message);
+  }
+
+  // Multi-Channel Alert Dispatch
+  try {
+    if (typeof deps.sendBreachAlert === 'function') {
+      await deps.sendBreachAlert(
+        {
+          doc,
+          reason,
+          failedAttempts: newFailedAttempts,
+          maxFailedAttempts: maxAttempts,
+          remainingAttempts: remaining,
+          isDestroyed,
+          userId,
+          ipAddress: ctx?.ip,
+          attemptedLat,
+          attemptedLng,
+          distanceMeters
+        },
+        deps
+      );
+    }
+  } catch (alertErr) {
+    console.error('[Alert Dispatch Warning]:', alertErr.message);
+  }
+
+  return { isDestroyed, newFailedAttempts, maxAttempts, remaining };
 }
 
 /**
@@ -32,6 +123,8 @@ function resolveDependencies(customDeps = {}) {
  */
 function getPolicyErrorMessage(code) {
   switch (code) {
+    case 'destroyed':
+      return 'This document was permanently destroyed and crypto-shredded following repeated unauthorized access attempts.';
     case 'consumed':
       return 'Document is no longer available';
     case 'expired':
@@ -59,7 +152,7 @@ function getPolicyErrorMessage(code) {
  *   code: string,
  *   location?: { lat: number, lng: number, accuracyMeters: number }|null
  * }} params
- * @param {{ ip?: string, userAgent?: string }} [ctx={}]
+ * @param {{ ip?: string, userAgent?: string, userEmail?: string }} [ctx={}]
  * @param {object} [customDeps={}]
  * @returns {Promise<{
  *   buffer: Buffer,
@@ -102,6 +195,16 @@ export async function unlockDocument(params, ctx = {}, customDeps = {}) {
     throw AppError.notFound('Document not found');
   }
 
+  // Upfront check: If document was already destroyed, reject immediately with 410
+  if (doc.status === 'destroyed') {
+    const err = new AppError(
+      'This document was permanently destroyed and crypto-shredded following repeated unauthorized access attempts.',
+      410
+    );
+    err.code = 'destroyed';
+    throw err;
+  }
+
   // 2) Validate document encryption key format: base64url decoding to exactly 32 bytes
   if (
     typeof documentKeyB64Url !== 'string' ||
@@ -122,7 +225,29 @@ export async function unlockDocument(params, ctx = {}, customDeps = {}) {
   }
 
   // 3) MFA step-up verification (MFA runs BEFORE policy check to prevent unauthorized geofence probing)
-  await deps.verifyStepUp(userId, code, ctx);
+  try {
+    await deps.verifyStepUp(userId, code, ctx);
+  } catch (mfaErr) {
+    const breach = await recordFailedAttemptAndCheckShred(doc, {
+      reason: 'mfa_failure',
+      userId,
+      attemptedLat: location?.lat,
+      attemptedLng: location?.lng,
+      ctx,
+      deps
+    });
+
+    if (breach.isDestroyed) {
+      const destroyedErr = new AppError(
+        'This document has been permanently destroyed and crypto-shredded after exceeding maximum failed access attempts.',
+        403
+      );
+      destroyedErr.code = 'document_destroyed';
+      throw destroyedErr;
+    }
+
+    throw mfaErr;
+  }
 
   // 4) Evaluate access policy (consumed, expired, geofence required/imprecise/outside)
   const now = deps.clock();
@@ -156,6 +281,26 @@ export async function unlockDocument(params, ctx = {}, customDeps = {}) {
       } else {
         await expQuery;
       }
+    } else if (policyResult.code !== 'consumed' && policyResult.code !== 'destroyed') {
+      // Geofence violations trigger intrusion defense tracking
+      const breach = await recordFailedAttemptAndCheckShred(doc, {
+        reason: policyResult.code,
+        userId,
+        attemptedLat: location?.lat,
+        attemptedLng: location?.lng,
+        distanceMeters: policyResult.distanceMeters,
+        ctx,
+        deps
+      });
+
+      if (breach.isDestroyed) {
+        const destroyedErr = new AppError(
+          'This document has been permanently destroyed and crypto-shredded after exceeding maximum failed access attempts.',
+          403
+        );
+        destroyedErr.code = 'document_destroyed';
+        throw destroyedErr;
+      }
     }
 
     const err = new AppError(getPolicyErrorMessage(policyResult.code), policyResult.status || 403);
@@ -172,6 +317,24 @@ export async function unlockDocument(params, ctx = {}, customDeps = {}) {
       deps
     );
   } catch (_) {
+    const breach = await recordFailedAttemptAndCheckShred(doc, {
+      reason: 'integrity_failure',
+      userId,
+      attemptedLat: location?.lat,
+      attemptedLng: location?.lng,
+      ctx,
+      deps
+    });
+
+    if (breach.isDestroyed) {
+      const destroyedErr = new AppError(
+        'This document has been permanently destroyed and crypto-shredded after exceeding maximum failed access attempts.',
+        403
+      );
+      destroyedErr.code = 'document_destroyed';
+      throw destroyedErr;
+    }
+
     const integrityErr = new AppError('Integrity check failed', 403);
     integrityErr.code = 'integrity';
     throw integrityErr;

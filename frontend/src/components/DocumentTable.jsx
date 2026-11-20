@@ -53,6 +53,8 @@ function getStatusBadgeStyle(status) {
       return { label: 'Expired', className: 'badge-3d-expired' };
     case 'revoked':
       return { label: 'Revoked', className: 'badge-3d-expired' };
+    case 'destroyed':
+      return { label: 'Destroyed', className: 'badge-3d-danger' };
     default:
       return { label: s || 'Unknown', className: 'badge-3d-sealed' };
   }
@@ -146,6 +148,8 @@ export function DocumentTable({
               disabledReason = 'Already opened';
             } else if (doc.status === 'revoked') {
               disabledReason = 'Revoked';
+            } else if (doc.status === 'destroyed') {
+              disabledReason = 'Crypto-shredded';
             }
 
             return (
@@ -234,6 +238,23 @@ export function DocumentTable({
                         }}
                       >
                         Geofenced
+                      </span>
+                    )}
+                    {Boolean(doc.failedAttempts && doc.failedAttempts > 0) && (
+                      <span
+                        title={doc.destructionReason ? `Destruction Reason: ${doc.destructionReason}` : `${doc.failedAttempts}/${doc.maxFailedAttempts || 3} failed unlock attempts`}
+                        style={{
+                          display: 'inline-block',
+                          padding: '0.15rem 0.45rem',
+                          borderRadius: '4px',
+                          fontSize: '0.7rem',
+                          fontWeight: 700,
+                          backgroundColor: doc.status === 'destroyed' ? 'rgba(244, 63, 94, 0.2)' : 'rgba(245, 158, 11, 0.15)',
+                          color: doc.status === 'destroyed' ? '#f43f5e' : '#fbbf24',
+                          border: `1px solid ${doc.status === 'destroyed' ? 'rgba(244, 63, 94, 0.5)' : 'rgba(245, 158, 11, 0.4)'}`
+                        }}
+                      >
+                        {doc.status === 'destroyed' ? '⚡ Shredded' : `⚠ ${doc.failedAttempts}/${doc.maxFailedAttempts || 3} Failed`}
                       </span>
                     )}
                   </div>

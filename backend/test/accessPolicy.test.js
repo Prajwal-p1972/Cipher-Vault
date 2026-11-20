@@ -25,6 +25,12 @@ describe('Document Access Policy Evaluation Tests', () => {
     }
   };
 
+  it('denies destroyed documents with code "destroyed" and status 410', () => {
+    const doc = { ...baseDoc, status: 'destroyed' };
+    const res = evaluatePolicy({ doc, now: new Date() });
+    assert.deepStrictEqual(res, { allowed: false, code: 'destroyed', status: 410 });
+  });
+
   it('denies consumed documents with code "consumed" and status 410', () => {
     const doc = { ...baseDoc, status: 'consumed' };
     const res = evaluatePolicy({ doc, now: new Date() });
@@ -88,7 +94,7 @@ describe('Document Access Policy Evaluation Tests', () => {
       now: new Date(),
       location: { lat: 37.7849, lng: -122.4194, accuracyMeters: 10 }
     });
-    assert.deepStrictEqual(res, { allowed: false, code: 'outside_area', status: 403 });
+    assert.deepStrictEqual(res, { allowed: false, code: 'outside_area', status: 403, distanceMeters: 1110 });
   });
 
   it('allows access when inside geofence radius and returns distance rounded to nearest 10m', () => {

@@ -61,7 +61,7 @@ describe('UploadForm Component Tests', () => {
     expect(await screen.findByText(/Expiry date cannot exceed 30 days from now/i)).toBeTruthy();
   });
 
-  it('enforces all-or-none validation for geofence parameters', async () => {
+  it('enforces mandatory geofence coordinates for all sealed documents', async () => {
     const fetchMock = vi.fn();
     globalThis.fetch = fetchMock;
 
@@ -69,30 +69,29 @@ describe('UploadForm Component Tests', () => {
 
     const fileInput = screen.getByLabelText(/Document File/i);
     const emailInput = screen.getByLabelText(/Recipient Email/i);
-    const geofenceCheckbox = screen.getByLabelText(/Enforce Geofenced Decryption/i);
     const submitBtn = screen.getByRole('button', { name: /Seal & Send Document/i });
 
     const validFile = new File(['content'], 'document.pdf', { type: 'application/pdf' });
     fireEvent.change(fileInput, { target: { files: [validFile] } });
     fireEvent.change(emailInput, { target: { value: 'receiver@example.com' } });
 
-    // Enable geofence
-    fireEvent.click(geofenceCheckbox);
+    // Submitting without coordinates
+    fireEvent.click(submitBtn);
+    expect(
+      await screen.findByText(/Geofence coordinates \(latitude, longitude, radius\) are mandatory for all sealed documents/i)
+    ).toBeTruthy();
 
     const latInput = screen.getByLabelText(/Latitude/i);
     const lngInput = screen.getByLabelText(/Longitude/i);
-    const radiusInput = screen.getByLabelText(/Radius/i);
+    const radiusInput = screen.getByLabelText(/Allowed Unlock Radius/i);
 
-    // Fill only lat, leave lng empty
-    fireEvent.change(latInput, { target: { value: '37.7749' } });
-    fireEvent.change(lngInput, { target: { value: '' } });
+    // Invalid lat (> 90)
+    fireEvent.change(latInput, { target: { value: '95' } });
+    fireEvent.change(lngInput, { target: { value: '10' } });
     fireEvent.change(radiusInput, { target: { value: '500' } });
-
     fireEvent.click(submitBtn);
 
-    expect(
-      await screen.findByText(/All three geofence fields \(latitude, longitude, and radius\) are required/i)
-    ).toBeTruthy();
+    expect(await screen.findByText(/Latitude must be a valid number between -90 and 90/i)).toBeTruthy();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -119,7 +118,6 @@ describe('UploadForm Component Tests', () => {
     const fileInput = screen.getByLabelText(/Document File/i);
     const emailInput = screen.getByLabelText(/Recipient Email/i);
     const oneTimeCheckbox = screen.getByLabelText(/One-Time Access/i);
-    const geofenceCheckbox = screen.getByLabelText(/Enforce Geofenced Decryption/i);
     const submitBtn = screen.getByRole('button', { name: /Seal & Send Document/i });
 
     const validFile = new File(['binary-content'], 'report.pdf', { type: 'application/pdf' });
@@ -127,11 +125,10 @@ describe('UploadForm Component Tests', () => {
     fireEvent.change(emailInput, { target: { value: 'bob@example.com' } });
     fireEvent.click(oneTimeCheckbox);
 
-    // Enable geofence with valid data
-    fireEvent.click(geofenceCheckbox);
+    // Provide mandatory geofence coordinates
     const latInput = screen.getByLabelText(/Latitude/i);
     const lngInput = screen.getByLabelText(/Longitude/i);
-    const radiusInput = screen.getByLabelText(/Radius/i);
+    const radiusInput = screen.getByLabelText(/Allowed Unlock Radius/i);
 
     fireEvent.change(latInput, { target: { value: '40.7128' } });
     fireEvent.change(lngInput, { target: { value: '-74.0060' } });
@@ -154,6 +151,7 @@ describe('UploadForm Component Tests', () => {
     expect(capturedBody.get('geoLat')).toBe('40.7128');
     expect(capturedBody.get('geoLng')).toBe('-74.006');
     expect(capturedBody.get('geoRadiusMeters')).toBe('1500');
+    expect(capturedBody.get('maxFailedAttempts')).toBe('3');
   });
 
   it('maps server error status codes (400, 404, 413, 429) to explicit user messages', async () => {
@@ -191,11 +189,15 @@ describe('UploadForm Component Tests', () => {
 
       const fileInput = screen.getByLabelText(/Document File/i);
       const emailInput = screen.getByLabelText(/Recipient Email/i);
+      const latInput = screen.getByLabelText(/Latitude/i);
+      const lngInput = screen.getByLabelText(/Longitude/i);
       const submitBtn = screen.getByRole('button', { name: /Seal & Send Document/i });
 
       const validFile = new File(['hello'], 'contract.pdf', { type: 'application/pdf' });
       fireEvent.change(fileInput, { target: { files: [validFile] } });
       fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
+      fireEvent.change(latInput, { target: { value: '37.7749' } });
+      fireEvent.change(lngInput, { target: { value: '-122.4194' } });
 
       fireEvent.click(submitBtn);
 
@@ -293,11 +295,15 @@ describe('UploadForm Component Tests', () => {
 
       const fileInput = screen.getByLabelText(/Document File/i);
       const emailInput = screen.getByLabelText(/Recipient Email/i);
+      const latInput = screen.getByLabelText(/Latitude/i);
+      const lngInput = screen.getByLabelText(/Longitude/i);
       const submitBtn = screen.getByRole('button', { name: /Seal & Send Document/i });
 
       const validFile = new File(['data'], 'report.pdf', { type: 'application/pdf' });
       fireEvent.change(fileInput, { target: { files: [validFile] } });
       fireEvent.change(emailInput, { target: { value: 'bob@example.com' } });
+      fireEvent.change(latInput, { target: { value: '37.7749' } });
+      fireEvent.change(lngInput, { target: { value: '-122.4194' } });
       fireEvent.blur(emailInput);
 
       await screen.findByText(/Receiver key fingerprint:/i);
@@ -325,7 +331,6 @@ describe('UploadForm Component Tests', () => {
             status: 201,
             json: async () => ({
               document: { id: 'doc-secure-77', delivery: 'wrapped', originalName: 'confidential.pdf' }
-              // NOTE: secure upload does NOT include documentKey
             })
           };
         }
@@ -336,11 +341,15 @@ describe('UploadForm Component Tests', () => {
 
       const fileInput = screen.getByLabelText(/Document File/i);
       const emailInput = screen.getByLabelText(/Recipient Email/i);
+      const latInput = screen.getByLabelText(/Latitude/i);
+      const lngInput = screen.getByLabelText(/Longitude/i);
       const submitBtn = screen.getByRole('button', { name: /Seal & Send Document/i });
 
       const validFile = new File(['secret'], 'confidential.pdf', { type: 'application/pdf' });
       fireEvent.change(fileInput, { target: { files: [validFile] } });
       fireEvent.change(emailInput, { target: { value: 'alice@example.com' } });
+      fireEvent.change(latInput, { target: { value: '37.7749' } });
+      fireEvent.change(lngInput, { target: { value: '-122.4194' } });
       fireEvent.blur(emailInput);
 
       await screen.findByText(/Receiver key fingerprint:/i);
@@ -350,14 +359,12 @@ describe('UploadForm Component Tests', () => {
       expect(successNotice).toBeTruthy();
       expect(successNotice.textContent).toContain('Document securely sealed and delivered');
 
-      // Ensure no QR canvas, qr code elements or keys appear in DOM
       expect(screen.queryByTestId('key-reveal-modal')).toBeNull();
       expect(document.body.innerHTML).not.toContain('Scan with Phone');
 
       expect(onSuccess).toHaveBeenCalledWith({
         document: { id: 'doc-secure-77', delivery: 'wrapped', originalName: 'confidential.pdf' }
       });
-      // documentKey was NOT returned or passed
       expect(onSuccess.mock.calls[0][0].documentKey).toBeUndefined();
     });
 
@@ -381,20 +388,22 @@ describe('UploadForm Component Tests', () => {
 
       render(<UploadForm onSuccess={onSuccess} />);
 
-      // Switch to QR handover
       const deliverySelect = screen.getByLabelText(/Delivery Method/i);
       fireEvent.change(deliverySelect, { target: { value: 'qr' } });
 
       const fileInput = screen.getByLabelText(/Document File/i);
       const emailInput = screen.getByLabelText(/Recipient Email/i);
+      const latInput = screen.getByLabelText(/Latitude/i);
+      const lngInput = screen.getByLabelText(/Longitude/i);
       const submitBtn = screen.getByRole('button', { name: /Seal & Send Document/i });
 
       const validFile = new File(['data'], 'qr-plan.pdf', { type: 'application/pdf' });
       fireEvent.change(fileInput, { target: { files: [validFile] } });
       fireEvent.change(emailInput, { target: { value: 'receiver@example.com' } });
+      fireEvent.change(latInput, { target: { value: '37.7749' } });
+      fireEvent.change(lngInput, { target: { value: '-122.4194' } });
       fireEvent.blur(emailInput);
 
-      // In QR mode, receiver key check is not triggered
       expect(screen.queryByText(/Receiver key fingerprint:/i)).toBeNull();
       expect(submitBtn.disabled).toBe(false);
 
@@ -445,14 +454,17 @@ describe('UploadForm Component Tests', () => {
 
       const fileInput = screen.getByLabelText(/Document File/i);
       const emailInput = screen.getByLabelText(/Recipient Email/i);
+      const latInput = screen.getByLabelText(/Latitude/i);
+      const lngInput = screen.getByLabelText(/Longitude/i);
       const submitBtn = screen.getByRole('button', { name: /Seal & Send Document/i });
 
       const validFile = new File(['data'], 'doc.pdf', { type: 'application/pdf' });
       fireEvent.change(fileInput, { target: { files: [validFile] } });
       fireEvent.change(emailInput, { target: { value: 'hasvault@example.com' } });
+      fireEvent.change(latInput, { target: { value: '37.7749' } });
+      fireEvent.change(lngInput, { target: { value: '-122.4194' } });
       fireEvent.blur(emailInput);
 
-      // Verify fingerprint appears and delivery switches back to wrapped
       expect(await screen.findByText(/Receiver key fingerprint:/i)).toBeTruthy();
       expect(deliverySelect.value).toBe('wrapped');
 
@@ -463,6 +475,52 @@ describe('UploadForm Component Tests', () => {
       });
 
       expect(capturedBody.get('delivery')).toBe('wrapped');
+    });
+
+    it('supports "Use My Location", radius quick-select pills, and max attempts selector', async () => {
+      const mockGeolocation = {
+        getCurrentPosition: vi.fn((success) => {
+          success({
+            coords: {
+              latitude: 37.774929,
+              longitude: -122.419416,
+              accuracy: 14
+            }
+          });
+        })
+      };
+      const origGeo = navigator.geolocation;
+      Object.defineProperty(navigator, 'geolocation', {
+        value: mockGeolocation,
+        configurable: true
+      });
+
+      render(<UploadForm onSuccess={vi.fn()} />);
+
+      const locBtn = screen.getByRole('button', { name: /Use My Location/i });
+      fireEvent.click(locBtn);
+
+      expect(await screen.findByText(/Location locked/i)).toBeTruthy();
+      const latInput = screen.getByLabelText(/Latitude/i);
+      const lngInput = screen.getByLabelText(/Longitude/i);
+      expect(latInput.value).toBe('37.774929');
+      expect(lngInput.value).toBe('-122.419416');
+      expect(await screen.findByText(/Valid GPS Coordinates Locked/i)).toBeTruthy();
+
+      // Click 5 km pill
+      const pill5km = screen.getByRole('button', { name: '5 km' });
+      fireEvent.click(pill5km);
+      const radiusInput = screen.getByLabelText(/Allowed Unlock Radius/i);
+      expect(radiusInput.value).toBe('5000');
+
+      // Click 2 Attempts button
+      const attempts2Btn = screen.getByRole('button', { name: /2 Attempts/i });
+      fireEvent.click(attempts2Btn);
+
+      Object.defineProperty(navigator, 'geolocation', {
+        value: origGeo,
+        configurable: true
+      });
     });
   });
 });

@@ -1,5 +1,6 @@
 import { Server } from 'socket.io';
 import { env } from '../config/env.js';
+import { isAllowedOrigin } from '../config/cors.js';
 import { SCOPES, verifyToken } from '../utils/jwt.js';
 
 let io = null;
@@ -16,12 +17,17 @@ const userSocketsMap = new Map();
 export function initSocketServer(httpServer) {
   io = new Server(httpServer, {
     cors: {
-      origin: env.CLIENT_ORIGIN,
+      origin: (origin, callback) => {
+        if (isAllowedOrigin(origin)) {
+          return callback(null, true);
+        }
+        return callback(null, false);
+      },
       credentials: true
     },
     allowRequest: (req, callback) => {
       const origin = req.headers.origin;
-      if (origin && origin !== env.CLIENT_ORIGIN) {
+      if (origin && !isAllowedOrigin(origin)) {
         return callback('Origin not allowed by CORS', false);
       }
       callback(null, true);

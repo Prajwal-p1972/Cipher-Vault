@@ -20,16 +20,32 @@ export function SocketProvider({ children }) {
       return;
     }
 
-    const socket = io('/', {
+    const socketUrl = (
+      import.meta.env?.VITE_SOCKET_URL ||
+      import.meta.env?.VITE_API_URL ||
+      (typeof window !== 'undefined' && window.location.origin ? window.location.origin : '/')
+    ).replace(/\/+$/, '');
+
+    const socket = io(socketUrl, {
+      path: '/socket.io',
       transports: ['websocket', 'polling'],
       auth: (cb) => {
         cb({ token: getAccessToken() });
       },
       autoConnect: true,
-      reconnection: true
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000
     });
+    socket.auth = { token: getAccessToken() };
 
     socketRef.current = socket;
+
+    if (socket.connected) {
+      setConnected(true);
+    }
 
     socket.on('connect', () => {
       setConnected(true);
@@ -41,7 +57,9 @@ export function SocketProvider({ children }) {
 
     const handleReauth = async () => {
       try {
-        await refreshSession();
+        const data = await refreshSession();
+        const freshToken = data?.accessToken || getAccessToken();
+        socket.auth = { token: freshToken };
         socket.connect();
       } catch (_) {
         socket.disconnect();

@@ -17,7 +17,7 @@ import { ChatPanel } from './ChatPanel.jsx';
  *   onResetRef?: React.MutableRefObject<(() => Promise<void>) | null>
  * }} props
  */
-export function LocalAiPanel({ blob, ai: externalAi, onResetRef }) {
+export function LocalAiPanel({ blob, ai: externalAi, onResetRef, style = {} }) {
   const internalAi = useLocalAi();
   const ai = externalAi || internalAi;
 
@@ -45,11 +45,12 @@ export function LocalAiPanel({ blob, ai: externalAi, onResetRef }) {
         border: '1px solid #334155',
         borderRadius: '8px',
         padding: '1.25rem',
-        margin: '1rem 0',
+        margin: 0,
         color: '#f8fafc',
         width: '100%',
-        maxWidth: '800px',
-        boxSizing: 'border-box'
+        maxWidth: '100%',
+        boxSizing: 'border-box',
+        ...style
       }}
     >
       {/* Header & Privacy Notice */}

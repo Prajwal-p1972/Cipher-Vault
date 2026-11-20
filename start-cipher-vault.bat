@@ -4,7 +4,7 @@ echo   CIPHER VAULT: MASTER BOOT SEQUENCE INITIATED
 echo ===================================================
 
 echo [1/5] Starting MongoDB Database...
-start "MongoDB" cmd /k "mongod"
+start "MongoDB" cmd /k "if exist ""C:\Program Files\MongoDB\Server\8.2\bin\mongod.exe"" (""C:\Program Files\MongoDB\Server\8.2\bin\mongod.exe"") else (mongod)"
 timeout /t 3 /nobreak > nul
 
 echo [2/5] Starting Local Llama 3 (Ollama)...
@@ -12,7 +12,7 @@ start "Ollama Engine" cmd /k "ollama run llama3"
 timeout /t 3 /nobreak > nul
 
 echo [3/5] Starting Python AI Microservice...
-start "FastAPI AI" cmd /k "cd ai-service && .\venv\Scripts\activate && python main.py"
+start "FastAPI AI" cmd /k "cd ai-service && if exist .venv\Scripts\python.exe (.venv\Scripts\python.exe run.py) else (python run.py)"
 timeout /t 3 /nobreak > nul
 
 echo [4/5] Starting Node.js Cryptographic Backend...

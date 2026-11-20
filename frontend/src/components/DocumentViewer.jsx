@@ -27,9 +27,22 @@ export function DocumentViewer({ blob: initialBlob, contentType, originalName, o
   const [objectUrl, setObjectUrl] = useState(null);
   const [error, setError] = useState(null);
   const [timeRemainingSeconds, setTimeRemainingSeconds] = useState(600);
+  const [activeMobileTab, setActiveMobileTab] = useState('doc'); // 'doc' | 'ai'
+  const [showAiDesktop, setShowAiDesktop] = useState(true);
+  const [isWideScreen, setIsWideScreen] = useState(
+    typeof window !== 'undefined' ? (window.innerWidth >= 1024 || window.innerWidth === 0) : true
+  );
 
   const urlRef = useRef(null);
   const localAi = useLocalAi();
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsWideScreen(window.innerWidth >= 1024 || window.innerWidth === 0);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleClose = () => {
     try {
@@ -139,7 +152,9 @@ export function DocumentViewer({ blob: initialBlob, contentType, originalName, o
           color: '#ffffff',
           padding: '0.85rem 1.75rem',
           borderBottom: '1px solid rgba(56, 189, 248, 0.25)',
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.6)'
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.6)',
+          flexWrap: 'wrap',
+          gap: '0.75rem'
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
@@ -157,18 +172,95 @@ export function DocumentViewer({ blob: initialBlob, contentType, originalName, o
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleClose}
-          className="btn btn-secondary btn-3d-danger"
-          style={{
-            padding: '0.45rem 1.15rem',
-            fontSize: '0.85rem',
-            width: 'auto'
-          }}
-        >
-          Close Viewer
-        </button>
+        {/* Center / Right Controls: Responsive Tab / Desktop Toggle & Close */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          {/* Mobile Screen Segmented Tabs */}
+          {!isWideScreen && (
+            <div
+              role="tablist"
+              aria-label="Viewer Views"
+              style={{
+                display: 'flex',
+                background: 'rgba(15, 23, 42, 0.85)',
+                padding: '3px',
+                borderRadius: '8px',
+                border: '1px solid rgba(56, 189, 248, 0.25)'
+              }}
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeMobileTab === 'doc'}
+                onClick={() => setActiveMobileTab('doc')}
+                style={{
+                  padding: '0.35rem 0.75rem',
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  borderRadius: '6px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: activeMobileTab === 'doc' ? 'rgba(56, 189, 248, 0.25)' : 'transparent',
+                  color: activeMobileTab === 'doc' ? '#38bdf8' : '#94a3b8',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                📄 Document
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeMobileTab === 'ai'}
+                onClick={() => setActiveMobileTab('ai')}
+                style={{
+                  padding: '0.35rem 0.75rem',
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  borderRadius: '6px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: activeMobileTab === 'ai' ? 'rgba(168, 85, 247, 0.25)' : 'transparent',
+                  color: activeMobileTab === 'ai' ? '#c084fc' : '#94a3b8',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                🤖 AI Assistant
+              </button>
+            </div>
+          )}
+
+          {/* Desktop Toggle Button */}
+          {isWideScreen && (
+            <button
+              type="button"
+              onClick={() => setShowAiDesktop((prev) => !prev)}
+              className="btn btn-secondary btn-3d-cyber"
+              style={{
+                padding: '0.4rem 0.85rem',
+                fontSize: '0.8rem',
+                width: 'auto',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem'
+              }}
+            >
+              <span>🤖</span>
+              <span>{showAiDesktop ? 'Hide AI Assistant' : 'Show AI Assistant'}</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={handleClose}
+            className="btn btn-secondary btn-3d-danger"
+            style={{
+              padding: '0.45rem 1.15rem',
+              fontSize: '0.85rem',
+              width: 'auto'
+            }}
+          >
+            Close Viewer
+          </button>
+        </div>
       </header>
 
       {/* 3D Volatile RAM Security Banner */}
@@ -200,130 +292,189 @@ export function DocumentViewer({ blob: initialBlob, contentType, originalName, o
         </span>
       </div>
 
-      {/* Viewer Body */}
+      {/* Viewer Body: Split-Pane Container with Independent Scrolling */}
       <main
         style={{
           flex: 1,
+          minHeight: 0,
           display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'flex-start',
-          overflow: 'auto',
-          padding: '1.5rem',
+          flexDirection: isWideScreen ? 'row' : 'column',
+          overflow: 'hidden',
           backgroundColor: '#030712',
-          gap: '1rem',
           boxSizing: 'border-box'
         }}
       >
         {error ? (
           <div
-            className="alert alert-error"
-            role="alert"
             style={{
-              maxWidth: '500px',
-              backgroundColor: '#fef2f2',
-              color: '#991b1b',
-              padding: '1.25rem',
-              borderRadius: '8px',
-              border: '1px solid #fecaca'
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '2rem'
             }}
           >
-            <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1rem' }}>Cannot View Document</h3>
-            <p style={{ margin: 0, fontSize: '0.875rem' }}>{error}</p>
+            <div
+              className="alert alert-error"
+              role="alert"
+              style={{
+                maxWidth: '500px',
+                backgroundColor: '#fef2f2',
+                color: '#991b1b',
+                padding: '1.25rem',
+                borderRadius: '8px',
+                border: '1px solid #fecaca'
+              }}
+            >
+              <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1rem' }}>Cannot View Document</h3>
+              <p style={{ margin: 0, fontSize: '0.875rem' }}>{error}</p>
+            </div>
           </div>
         ) : !objectUrl ? (
-          <div style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Loading secure view...</div>
+          <div
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#94a3b8',
+              fontSize: '0.9rem'
+            }}
+          >
+            Loading secure view...
+          </div>
         ) : (
           <>
-            <LocalAiPanel blob={blob} ai={localAi} />
-            {normalizedType === 'application/pdf' && (
-              <div
-                className="preserve-3d"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  minHeight: '620px',
-                  borderRadius: '12px',
-                  padding: '3px',
-                  background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.35) 0%, rgba(139, 92, 246, 0.35) 100%)',
-                  boxShadow: '0 20px 45px -10px rgba(0, 0, 0, 0.9), 0 0 20px rgba(0, 240, 255, 0.15)'
-                }}
-              >
-                <iframe
-                  title="Decrypted PDF Document"
-                  src={objectUrl}
-                  referrerPolicy="no-referrer"
+            {/* Left Pane: Document Viewer */}
+            <div
+              data-testid="document-pane"
+              style={{
+                flex: isWideScreen ? (showAiDesktop ? '1 1 58%' : '1 1 100%') : '1 1 auto',
+                minWidth: 0,
+                minHeight: 0,
+                height: '100%',
+                overflowY: 'auto',
+                overscrollBehavior: 'contain',
+                padding: '1.25rem',
+                boxSizing: 'border-box',
+                display: (!isWideScreen && activeMobileTab !== 'doc') ? 'none' : 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'flex-start'
+              }}
+            >
+              {normalizedType === 'application/pdf' && (
+                <div
+                  className="preserve-3d"
                   style={{
                     width: '100%',
                     height: '100%',
-                    border: 'none',
-                    borderRadius: '9px',
-                    backgroundColor: '#ffffff'
-                  }}
-                />
-              </div>
-            )}
-
-            {normalizedType === 'image/jpeg' && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: '100%',
-                  height: '100%'
-                }}
-              >
-                <img
-                  src={objectUrl}
-                  alt={fileName}
-                  style={{
-                    maxWidth: '100%',
-                    maxHeight: '100%',
-                    objectFit: 'contain',
-                    borderRadius: '6px',
-                    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)'
-                  }}
-                />
-              </div>
-            )}
-
-            {normalizedType === 'application/zip' && (
-              <div
-                style={{
-                  backgroundColor: '#0f172a',
-                  border: '1px solid #334155',
-                  borderRadius: '12px',
-                  padding: '2.5rem',
-                  maxWidth: '480px',
-                  textAlign: 'center',
-                  color: '#f8fafc',
-                  boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)'
-                }}
-              >
-                <span style={{ fontSize: '3rem', display: 'block', marginBottom: '1rem' }}>&#128230;</span>
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 600, margin: '0 0 0.5rem 0' }}>
-                  Decrypted ZIP Archive
-                </h3>
-                <p style={{ fontSize: '0.875rem', color: '#94a3b8', margin: '0 0 1.5rem 0', lineHeight: 1.5 }}>
-                  ZIP archives cannot be previewed directly inside the browser. You may save the decrypted archive to your device.
-                </p>
-                <a
-                  href={objectUrl}
-                  download={fileName}
-                  className="btn btn-primary"
-                  style={{
-                    display: 'inline-block',
-                    padding: '0.65rem 1.5rem',
-                    fontSize: '0.9rem',
-                    textDecoration: 'none',
-                    fontWeight: 600
+                    minHeight: '620px',
+                    borderRadius: '12px',
+                    padding: '3px',
+                    background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.35) 0%, rgba(139, 92, 246, 0.35) 100%)',
+                    boxShadow: '0 20px 45px -10px rgba(0, 0, 0, 0.9), 0 0 20px rgba(0, 240, 255, 0.15)'
                   }}
                 >
-                  Download Decrypted ZIP
-                </a>
-              </div>
-            )}
+                  <iframe
+                    title="Decrypted PDF Document"
+                    src={objectUrl}
+                    referrerPolicy="no-referrer"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      border: 'none',
+                      borderRadius: '9px',
+                      backgroundColor: '#ffffff'
+                    }}
+                  />
+                </div>
+              )}
+
+              {normalizedType === 'image/jpeg' && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '100%',
+                    height: '100%'
+                  }}
+                >
+                  <img
+                    src={objectUrl}
+                    alt={fileName}
+                    style={{
+                      maxWidth: '100%',
+                      maxHeight: '100%',
+                      objectFit: 'contain',
+                      borderRadius: '6px',
+                      boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)'
+                    }}
+                  />
+                </div>
+              )}
+
+              {normalizedType === 'application/zip' && (
+                <div
+                  style={{
+                    backgroundColor: '#0f172a',
+                    border: '1px solid #334155',
+                    borderRadius: '12px',
+                    padding: '2.5rem',
+                    maxWidth: '480px',
+                    textAlign: 'center',
+                    color: '#f8fafc',
+                    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)',
+                    marginTop: '2rem'
+                  }}
+                >
+                  <span style={{ fontSize: '3rem', display: 'block', marginBottom: '1rem' }}>&#128230;</span>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 600, margin: '0 0 0.5rem 0' }}>
+                    Decrypted ZIP Archive
+                  </h3>
+                  <p style={{ fontSize: '0.875rem', color: '#94a3b8', margin: '0 0 1.5rem 0', lineHeight: 1.5 }}>
+                    ZIP archives cannot be previewed directly inside the browser. You may save the decrypted archive to your device.
+                  </p>
+                  <a
+                    href={objectUrl}
+                    download={fileName}
+                    className="btn btn-primary"
+                    style={{
+                      display: 'inline-block',
+                      padding: '0.65rem 1.5rem',
+                      fontSize: '0.9rem',
+                      textDecoration: 'none',
+                      fontWeight: 600
+                    }}
+                  >
+                    Download Decrypted ZIP
+                  </a>
+                </div>
+              )}
+            </div>
+
+            {/* Right Pane: Local AI Assistant */}
+            <div
+              data-testid="ai-pane"
+              style={{
+                flex: isWideScreen ? '0 0 460px' : '1 1 auto',
+                maxWidth: isWideScreen ? '45%' : '100%',
+                minWidth: isWideScreen ? '360px' : 0,
+                minHeight: 0,
+                height: '100%',
+                overflowY: 'auto',
+                overscrollBehavior: 'contain',
+                padding: '1.25rem',
+                boxSizing: 'border-box',
+                borderLeft: isWideScreen && showAiDesktop ? '1px solid rgba(56, 189, 248, 0.2)' : 'none',
+                display: isWideScreen
+                  ? (showAiDesktop ? 'block' : 'none')
+                  : (activeMobileTab === 'ai' ? 'block' : 'none')
+              }}
+            >
+              <LocalAiPanel blob={blob} ai={localAi} />
+            </div>
           </>
         )}
       </main>

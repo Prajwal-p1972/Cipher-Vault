@@ -111,9 +111,70 @@ const documentSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['pending', 'sealed', 'delivered', 'consumed', 'expired', 'revoked'],
+      enum: ['pending', 'sealed', 'delivered', 'consumed', 'expired', 'revoked', 'destroyed'],
       default: 'pending'
     },
+    maxFailedAttempts: {
+      type: Number,
+      default: 3,
+      min: 1,
+      max: 5
+    },
+    failedAttempts: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    destroyedAt: {
+      type: Date,
+      default: null
+    },
+    destructionReason: {
+      type: String,
+      default: null
+    },
+    alertPhone: {
+      type: String,
+      default: null,
+      trim: true
+    },
+    intrusionLog: [
+      {
+        attemptedAt: {
+          type: Date,
+          default: Date.now
+        },
+        attemptedByUserId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'User',
+          default: null
+        },
+        attemptedByEmail: {
+          type: String,
+          default: null
+        },
+        ipAddress: {
+          type: String,
+          default: null
+        },
+        reason: {
+          type: String,
+          required: true
+        },
+        attemptedLat: {
+          type: Number,
+          default: null
+        },
+        attemptedLng: {
+          type: Number,
+          default: null
+        },
+        distanceMeters: {
+          type: Number,
+          default: null
+        }
+      }
+    ],
     accessCount: {
       type: Number,
       default: 0

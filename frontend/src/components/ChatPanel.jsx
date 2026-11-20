@@ -19,22 +19,66 @@ export function ChatPanel({ session }) {
   const { messages, isStreaming, error, ask, stop, clear } = useChat(session);
   const [input, setInput] = useState('');
   const messagesEndRef = useRef(null);
+  const messageListRef = useRef(null);
   const textareaRef = useRef(null);
+  const userScrolledUpRef = useRef(false);
+  const [isScrolledUp, setIsScrolledUp] = useState(false);
 
-  // Auto-scroll as streaming tokens arrive
+  // Detect whether user manually scrolled up to inspect earlier text/citations
+  const handleScroll = (e) => {
+    const el = e.currentTarget;
+    if (!el) return;
+    const threshold = 60; // px threshold from bottom
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
+    if (isNearBottom) {
+      userScrolledUpRef.current = false;
+      setIsScrolledUp(false);
+    } else {
+      userScrolledUpRef.current = true;
+      setIsScrolledUp(true);
+    }
+  };
+
+  // Auto-scroll as streaming tokens arrive ONLY when the user is already near the bottom
   useEffect(() => {
-    if (messagesEndRef.current && typeof messagesEndRef.current.scrollIntoView === 'function') {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (!userScrolledUpRef.current && messageListRef.current) {
+      messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
     }
   }, [messages]);
 
   const handleSend = () => {
     const trimmed = input.trim();
     if (!trimmed || isStreaming) return;
+    userScrolledUpRef.current = false;
+    setIsScrolledUp(false);
     ask(trimmed);
     setInput('');
+    if (messageListRef.current) {
+      messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+    }
     if (textareaRef.current) {
       textareaRef.current.focus();
+    }
+  };
+
+  const handleQuickAsk = (questionText, mode) => {
+    if (isStreaming || !session) return;
+    userScrolledUpRef.current = false;
+    setIsScrolledUp(false);
+    ask(questionText, mode);
+    if (messageListRef.current) {
+      messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+    }
+  };
+
+  const scrollToLatest = () => {
+    userScrolledUpRef.current = false;
+    setIsScrolledUp(false);
+    if (messageListRef.current) {
+      messageListRef.current.scrollTo({
+        top: messageListRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
     }
   };
 
@@ -110,7 +154,7 @@ export function ChatPanel({ session }) {
       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
         <button
           type="button"
-          onClick={() => ask('Summarize document', 'summary')}
+          onClick={() => handleQuickAsk('Summarize document', 'summary')}
           disabled={isStreaming || !session}
           aria-label="Summarize document"
           className="quick-action-3d-chip"
@@ -123,7 +167,7 @@ export function ChatPanel({ session }) {
         </button>
         <button
           type="button"
-          onClick={() => ask('Detailed summary of document', 'detailed')}
+          onClick={() => handleQuickAsk('Detailed summary of document', 'detailed')}
           disabled={isStreaming || !session}
           aria-label="Detailed summary"
           className="quick-action-3d-chip"
@@ -136,130 +180,165 @@ export function ChatPanel({ session }) {
         </button>
       </div>
 
-      {/* Message List */}
-      <div
-        style={{
-          maxHeight: '320px',
-          overflowY: 'auto',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '0.75rem',
-          padding: '0.5rem 0'
-        }}
-      >
-        {messages.length === 0 ? (
-          <div
-            style={{
-              color: '#64748b',
-              fontSize: '0.825rem',
-              textAlign: 'center',
-              padding: '1.5rem 0'
-            }}
-          >
-            Ask questions about the content of this document. Answers are generated entirely offline.
-          </div>
-        ) : (
-          messages.map((m) => (
+      {/* Message List Container with Scroll Freeze Prevention */}
+      <div style={{ position: 'relative' }}>
+        <div
+          ref={messageListRef}
+          onScroll={handleScroll}
+          style={{
+            maxHeight: '360px',
+            minHeight: '160px',
+            overflowY: 'auto',
+            overscrollBehavior: 'contain',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.75rem',
+            padding: '0.5rem 0.25rem'
+          }}
+        >
+          {messages.length === 0 ? (
             <div
-              key={m.id}
               style={{
-                alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-                maxWidth: '85%',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.35rem'
+                color: '#64748b',
+                fontSize: '0.825rem',
+                textAlign: 'center',
+                padding: '1.5rem 0'
               }}
             >
+              Ask questions about the content of this document. Answers are generated entirely offline.
+            </div>
+          ) : (
+            messages.map((m) => (
               <div
+                key={m.id}
                 style={{
-                  fontSize: '0.7rem',
-                  fontWeight: 600,
-                  color: m.role === 'user' ? '#38bdf8' : '#a78bfa'
+                  alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
+                  maxWidth: '85%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.35rem'
                 }}
               >
-                {m.role === 'user' ? 'You' : 'Local AI'}
-              </div>
-
-              {/* Multi-step summarization progress indicator */}
-              {m.role === 'assistant' && m.streaming && m.progress && (
                 <div
-                  data-testid="summary-progress"
                   style={{
-                    fontSize: '0.75rem',
-                    color: '#38bdf8',
-                    fontStyle: 'italic',
-                    marginBottom: '0.15rem'
+                    fontSize: '0.7rem',
+                    fontWeight: 600,
+                    color: m.role === 'user' ? '#38bdf8' : '#a78bfa'
                   }}
                 >
-                  Summarizing... step {m.progress.step} of {m.progress.of}
+                  {m.role === 'user' ? 'You' : 'Local AI'}
                 </div>
-              )}
 
-              {/* Strict Plain-Text Render Container */}
-              <div
-                className={m.role === 'user' ? 'chat-bubble-3d-user' : 'chat-bubble-3d-ai'}
-                style={{
-                  padding: '0.65rem 0.85rem',
-                  borderRadius: '8px',
-                  fontSize: '0.85rem',
-                  lineHeight: 1.5,
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                  color: '#f8fafc',
-                  border: m.error ? '1px solid #ef4444' : undefined
-                }}
-              >
-                {m.text}
-                {m.streaming && (
-                  <span
-                    aria-hidden="true"
+                {/* Multi-step summarization progress indicator */}
+                {m.role === 'assistant' && m.streaming && m.progress && (
+                  <div
+                    data-testid="summary-progress"
                     style={{
-                      display: 'inline-block',
-                      width: '6px',
-                      height: '14px',
-                      backgroundColor: '#38bdf8',
-                      marginLeft: '4px',
-                      verticalAlign: 'text-bottom',
-                      animation: 'pulse 1s infinite'
+                      fontSize: '0.75rem',
+                      color: '#38bdf8',
+                      fontStyle: 'italic',
+                      marginBottom: '0.15rem'
                     }}
-                  />
+                  >
+                    Summarizing... step {m.progress.step} of {m.progress.of}
+                  </div>
+                )}
+
+                {/* Strict Plain-Text Render Container */}
+                <div
+                  className={m.role === 'user' ? 'chat-bubble-3d-user' : 'chat-bubble-3d-ai'}
+                  style={{
+                    padding: '0.65rem 0.85rem',
+                    borderRadius: '8px',
+                    fontSize: '0.85rem',
+                    lineHeight: 1.5,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    color: '#f8fafc',
+                    border: m.error ? '1px solid #ef4444' : undefined
+                  }}
+                >
+                  {m.text}
+                  {m.streaming && (
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        display: 'inline-block',
+                        width: '6px',
+                        height: '14px',
+                        backgroundColor: '#38bdf8',
+                        marginLeft: '4px',
+                        verticalAlign: 'text-bottom',
+                        animation: 'pulse 1s infinite'
+                      }}
+                    />
+                  )}
+                </div>
+
+                {/* Sources Citation Line */}
+                {m.role === 'assistant' && Array.isArray(m.sources) && m.sources.length > 0 && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      flexWrap: 'wrap',
+                      fontSize: '0.75rem',
+                      color: '#94a3b8'
+                    }}
+                  >
+                    <span style={{ fontWeight: 600 }}>Sources:</span>
+                    {Array.from(
+                      new Map(
+                        m.sources
+                          .filter((s) => s && s.page !== undefined)
+                          .map((s) => [s.page, s])
+                      ).values()
+                    ).map((s, idx) => (
+                      <span
+                        key={s.page ?? idx}
+                        data-testid="page-chip"
+                        className="citation-pill-3d"
+                      >
+                        p.{s.page}
+                      </span>
+                    ))}
+                  </div>
                 )}
               </div>
+            ))
+          )}
+          <div ref={messagesEndRef} />
+        </div>
 
-              {/* Sources Citation Line */}
-              {m.role === 'assistant' && Array.isArray(m.sources) && m.sources.length > 0 && (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.35rem',
-                    flexWrap: 'wrap',
-                    fontSize: '0.75rem',
-                    color: '#94a3b8'
-                  }}
-                >
-                  <span style={{ fontWeight: 600 }}>Sources:</span>
-                  {Array.from(
-                    new Map(
-                      m.sources
-                        .filter((s) => s && s.page !== undefined)
-                        .map((s) => [s.page, s])
-                    ).values()
-                  ).map((s, idx) => (
-                    <span
-                      key={s.page ?? idx}
-                      data-testid="page-chip"
-                      className="citation-pill-3d"
-                    >
-                      p.{s.page}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))
+        {/* Floating Jump to Latest Button when User has Scrolled Up */}
+        {isScrolledUp && (
+          <button
+            type="button"
+            onClick={scrollToLatest}
+            aria-label="Jump to latest message"
+            style={{
+              position: 'absolute',
+              bottom: '0.5rem',
+              right: '0.5rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              padding: '0.35rem 0.75rem',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              borderRadius: '9999px',
+              backgroundColor: 'rgba(15, 23, 42, 0.9)',
+              color: '#38bdf8',
+              border: '1px solid rgba(56, 189, 248, 0.5)',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5), 0 0 10px rgba(56, 189, 248, 0.25)',
+              cursor: 'pointer',
+              zIndex: 10
+            }}
+          >
+            <span>&darr;</span> Jump to latest
+          </button>
         )}
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Live Region for Screen Readers */}

@@ -72,11 +72,15 @@ export function UploadForm({ onSuccess }) {
   const [receiverKeyStatus, setReceiverKeyStatus] = useState(null); // 'found' | 'not_found' | null
   const [receiverFingerprint, setReceiverFingerprint] = useState(null);
 
-  // Geofence fields
-  const [enableGeofence, setEnableGeofence] = useState(false);
+  // Mandatory Geofence fields
   const [geoLat, setGeoLat] = useState('');
   const [geoLng, setGeoLng] = useState('');
   const [geoRadiusMeters, setGeoRadiusMeters] = useState('500');
+  const [locationFeedback, setLocationFeedback] = useState(null);
+
+  // Intrusion Protection & Breach Defense fields
+  const [maxFailedAttempts, setMaxFailedAttempts] = useState('3');
+  const [alertPhone, setAlertPhone] = useState('');
 
   // UI status
   const [submitting, setSubmitting] = useState(false);
@@ -90,14 +94,23 @@ export function UploadForm({ onSuccess }) {
   const emailInputId = useId();
   const expiryInputId = useId();
   const oneTimeInputId = useId();
-  const geofenceCheckboxId = useId();
   const latInputId = useId();
   const lngInputId = useId();
   const radiusInputId = useId();
+  const maxAttemptsInputId = useId();
+  const alertPhoneInputId = useId();
 
   const now = new Date();
   const minExpiry = formatDateTimeLocal(now);
   const maxExpiry = formatDateTimeLocal(new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000));
+
+  const hasLat = geoLat.trim() !== '';
+  const hasLng = geoLng.trim() !== '';
+  const parsedLatNum = Number(geoLat);
+  const parsedLngNum = Number(geoLng);
+  const isLatValid = hasLat && !Number.isNaN(parsedLatNum) && parsedLatNum >= -90 && parsedLatNum <= 90;
+  const isLngValid = hasLng && !Number.isNaN(parsedLngNum) && parsedLngNum >= -180 && parsedLngNum <= 180;
+  const isGpsValid = isLatValid && isLngValid;
 
   const handleFileChange = (e) => {
     const selected = e.target.files?.[0] || null;
@@ -143,28 +156,33 @@ export function UploadForm({ onSuccess }) {
 
   const handleUseLocation = () => {
     if (!navigator.geolocation) {
-      setErrorMessage('Geolocation is not supported by your browser.');
+      const msg = 'Geolocation is not supported by your browser.';
+      setErrorMessage(msg);
+      setLocationFeedback(msg);
       return;
     }
 
     setGeoLocating(true);
     setErrorMessage(null);
+    setLocationFeedback('Acquiring high-accuracy GPS fix from device sensors...');
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setGeoLocating(false);
         setGeoLat(position.coords.latitude.toFixed(6));
         setGeoLng(position.coords.longitude.toFixed(6));
+        const acc = Math.round(position.coords.accuracy || 0);
+        setLocationFeedback(`✓ GPS location locked (±${acc}m accuracy)`);
       },
       (err) => {
         setGeoLocating(false);
-        if (err.code === 1) {
-          setErrorMessage('Location permission denied. Please allow location access or enter coordinates manually.');
-        } else {
-          setErrorMessage('Failed to determine location. Please enter coordinates manually.');
-        }
+        const msg = err.code === 1
+          ? 'Location permission denied. Please allow location access or enter coordinates manually.'
+          : 'Failed to determine location. Please enter coordinates manually.';
+        setErrorMessage(msg);
+        setLocationFeedback(msg);
       },
-      { timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 10000 }
     );
   };
 
@@ -216,44 +234,36 @@ export function UploadForm({ onSuccess }) {
       isoExpiresAt = expDate.toISOString();
     }
 
-    // 5. Validate Geofence (all-or-none)
-    const hasAnyGeo =
-      enableGeofence ||
-      geoLat.trim() !== '' ||
-      geoLng.trim() !== '';
-
-    let validatedGeo = null;
-    if (hasAnyGeo) {
-      if (geoLat.trim() === '' || geoLng.trim() === '' || geoRadiusMeters.trim() === '') {
-        setErrorMessage('All three geofence fields (latitude, longitude, and radius) are required when geofencing is enabled.');
-        return;
-      }
-
-      const parsedLat = Number(geoLat);
-      const parsedLng = Number(geoLng);
-      const parsedRadius = Number(geoRadiusMeters);
-
-      if (Number.isNaN(parsedLat) || parsedLat < -90 || parsedLat > 90) {
-        setErrorMessage('Latitude must be a valid number between -90 and 90.');
-        return;
-      }
-
-      if (Number.isNaN(parsedLng) || parsedLng < -180 || parsedLng > 180) {
-        setErrorMessage('Longitude must be a valid number between -180 and 180.');
-        return;
-      }
-
-      if (Number.isNaN(parsedRadius) || parsedRadius < 1 || parsedRadius > 100000) {
-        setErrorMessage('Radius must be between 1 and 100,000 meters.');
-        return;
-      }
-
-      validatedGeo = {
-        lat: parsedLat,
-        lng: parsedLng,
-        radiusMeters: parsedRadius
-      };
+    // 5. Validate Mandatory Geofence
+    if (geoLat.trim() === '' || geoLng.trim() === '' || geoRadiusMeters.trim() === '') {
+      setErrorMessage('Geofence coordinates (latitude, longitude, radius) are mandatory for all sealed documents');
+      return;
     }
+
+    const parsedLat = Number(geoLat);
+    const parsedLng = Number(geoLng);
+    const parsedRadius = Number(geoRadiusMeters);
+
+    if (Number.isNaN(parsedLat) || parsedLat < -90 || parsedLat > 90) {
+      setErrorMessage('Latitude must be a valid number between -90 and 90.');
+      return;
+    }
+
+    if (Number.isNaN(parsedLng) || parsedLng < -180 || parsedLng > 180) {
+      setErrorMessage('Longitude must be a valid number between -180 and 180.');
+      return;
+    }
+
+    if (Number.isNaN(parsedRadius) || parsedRadius < 1 || parsedRadius > 100000) {
+      setErrorMessage('Radius must be between 1 and 100,000 meters.');
+      return;
+    }
+
+    const validatedGeo = {
+      lat: parsedLat,
+      lng: parsedLng,
+      radiusMeters: parsedRadius
+    };
 
     // 6. Construct FormData
     const formData = new FormData();
@@ -266,10 +276,12 @@ export function UploadForm({ onSuccess }) {
       formData.append('expiresAt', isoExpiresAt);
     }
 
-    if (validatedGeo) {
-      formData.append('geoLat', String(validatedGeo.lat));
-      formData.append('geoLng', String(validatedGeo.lng));
-      formData.append('geoRadiusMeters', String(validatedGeo.radiusMeters));
+    formData.append('geoLat', String(validatedGeo.lat));
+    formData.append('geoLng', String(validatedGeo.lng));
+    formData.append('geoRadiusMeters', String(validatedGeo.radiusMeters));
+    formData.append('maxFailedAttempts', String(maxFailedAttempts || '3'));
+    if (alertPhone.trim()) {
+      formData.append('alertPhone', alertPhone.trim());
     }
 
     // 7. Submit with UI progress & structured error mapping
@@ -286,10 +298,12 @@ export function UploadForm({ onSuccess }) {
       setReceiverEmail('');
       setExpiresAt('');
       setOneTimeUse(false);
-      setEnableGeofence(false);
       setGeoLat('');
       setGeoLng('');
       setGeoRadiusMeters('500');
+      setMaxFailedAttempts('3');
+      setAlertPhone('');
+      setLocationFeedback(null);
       setReceiverKeyStatus(null);
       setReceiverFingerprint(null);
 
@@ -373,8 +387,8 @@ export function UploadForm({ onSuccess }) {
 
       {/* Delivery Mode Selector */}
       <div className="form-group" style={{ marginBottom: '1.25rem' }}>
-        <label htmlFor={deliveryInputId} className="form-label" style={{ fontWeight: 600 }}>
-          Delivery Method <span style={{ color: '#dc2626' }}>*</span>
+        <label htmlFor={deliveryInputId} className="form-label" style={{ fontWeight: 600, color: '#f1f5f9', display: 'block', marginBottom: '0.4rem' }}>
+          Delivery Method <span style={{ color: '#f43f5e' }}>*</span>
         </label>
         <select
           id={deliveryInputId}
@@ -387,14 +401,14 @@ export function UploadForm({ onSuccess }) {
           }}
           disabled={submitting || hasRegisteredVaultKey}
           className="form-input"
-          style={{ padding: '0.5rem' }}
+          style={{ padding: '0.65rem 0.85rem' }}
         >
           <option value="wrapped">Secure delivery (recommended)</option>
           <option value="qr" disabled={hasRegisteredVaultKey}>
             In-person QR handover{hasRegisteredVaultKey ? ' (Receiver Vault Key detected)' : ''}
           </option>
         </select>
-        <span style={{ fontSize: '0.78rem', color: '#64748b', display: 'block', marginTop: '0.35rem' }}>
+        <span style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'block', marginTop: '0.35rem' }}>
           {delivery === 'wrapped'
             ? 'Delivers the encryption key directly to the recipient’s browser vault key (no QR code required).'
             : 'Generates a one-time cryptographic QR code for in-person handover.'}
@@ -403,8 +417,8 @@ export function UploadForm({ onSuccess }) {
 
       {/* File Upload Field */}
       <div className="form-group" style={{ marginBottom: '1.25rem' }}>
-        <label htmlFor={fileInputId} className="form-label" style={{ fontWeight: 600 }}>
-          Document File <span style={{ color: '#dc2626' }}>*</span>
+        <label htmlFor={fileInputId} className="form-label" style={{ fontWeight: 600, color: '#f1f5f9', display: 'block', marginBottom: '0.4rem' }}>
+          Document File <span style={{ color: '#f43f5e' }}>*</span>
         </label>
         <input
           id={fileInputId}
@@ -413,17 +427,17 @@ export function UploadForm({ onSuccess }) {
           onChange={handleFileChange}
           disabled={submitting}
           className="form-input"
-          style={{ padding: '0.5rem' }}
+          style={{ padding: '0.5rem 0.75rem' }}
         />
-        <span style={{ fontSize: '0.78rem', color: '#64748b', display: 'block', marginTop: '0.35rem' }}>
+        <span style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'block', marginTop: '0.35rem' }}>
           Accepted formats: PDF, JPEG, ZIP (Max 25 MB)
         </span>
       </div>
 
       {/* Recipient Email Field */}
       <div className="form-group" style={{ marginBottom: '1.25rem' }}>
-        <label htmlFor={emailInputId} className="form-label" style={{ fontWeight: 600 }}>
-          Recipient Email <span style={{ color: '#dc2626' }}>*</span>
+        <label htmlFor={emailInputId} className="form-label" style={{ fontWeight: 600, color: '#f1f5f9', display: 'block', marginBottom: '0.4rem' }}>
+          Recipient Email <span style={{ color: '#f43f5e' }}>*</span>
         </label>
         <input
           id={emailInputId}
@@ -445,7 +459,7 @@ export function UploadForm({ onSuccess }) {
         />
 
         {checkingReceiverKey && (
-          <span style={{ fontSize: '0.78rem', color: '#64748b', display: 'block', marginTop: '0.35rem' }}>
+          <span style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'block', marginTop: '0.35rem' }}>
             Checking recipient vault key...
           </span>
         )}
@@ -495,7 +509,7 @@ export function UploadForm({ onSuccess }) {
 
       {/* Expiry Date/Time */}
       <div className="form-group" style={{ marginBottom: '1.25rem' }}>
-        <label htmlFor={expiryInputId} className="form-label" style={{ fontWeight: 600 }}>
+        <label htmlFor={expiryInputId} className="form-label" style={{ fontWeight: 600, color: '#f1f5f9', display: 'block', marginBottom: '0.4rem' }}>
           Access Expiration (Optional)
         </label>
         <input
@@ -508,7 +522,7 @@ export function UploadForm({ onSuccess }) {
           disabled={submitting}
           className="form-input"
         />
-        <span style={{ fontSize: '0.78rem', color: '#64748b', display: 'block', marginTop: '0.35rem' }}>
+        <span style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'block', marginTop: '0.35rem' }}>
           Leave empty for unlimited duration (up to 30 days ahead)
         </span>
       </div>
@@ -523,7 +537,8 @@ export function UploadForm({ onSuccess }) {
             gap: '0.5rem',
             cursor: submitting ? 'not-allowed' : 'pointer',
             fontSize: '0.875rem',
-            fontWeight: 500
+            fontWeight: 500,
+            color: '#e2e8f0'
           }}
         >
           <input
@@ -538,113 +553,312 @@ export function UploadForm({ onSuccess }) {
         </label>
       </div>
 
-      {/* Geofence Configuration Section */}
+      {/* Mandatory Geofence Configuration Section */}
       <div
         className="geofence-section"
         style={{
-          border: '1px solid #e2e8f0',
-          borderRadius: '8px',
-          padding: '1rem',
+          border: '1px solid rgba(0, 240, 255, 0.35)',
+          borderRadius: '10px',
+          padding: '1.25rem',
           marginBottom: '1.5rem',
-          backgroundColor: '#f8fafc'
+          backgroundColor: 'rgba(6, 11, 22, 0.85)',
+          boxShadow: 'inset 0 1px 3px rgba(0, 0, 0, 0.6), 0 0 15px rgba(0, 240, 255, 0.08)'
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <label
-            htmlFor={geofenceCheckboxId}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              cursor: submitting ? 'not-allowed' : 'pointer',
-              fontSize: '0.875rem',
-              fontWeight: 600
-            }}
-          >
-            <input
-              id={geofenceCheckboxId}
-              type="checkbox"
-              checked={enableGeofence}
-              onChange={(e) => setEnableGeofence(e.target.checked)}
-              disabled={submitting}
-              style={{ width: '1.1rem', height: '1.1rem', cursor: 'pointer' }}
-            />
-            <span>Enforce Geofenced Decryption</span>
-          </label>
-
-          {enableGeofence && (
-            <button
-              type="button"
-              onClick={handleUseLocation}
-              disabled={submitting || geoLocating}
-              className="btn btn-secondary"
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span
               style={{
-                fontSize: '0.78rem',
-                padding: '0.35rem 0.65rem',
-                cursor: submitting || geoLocating ? 'not-allowed' : 'pointer'
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                padding: '0.25rem 0.65rem',
+                borderRadius: '9999px',
+                fontSize: '0.75rem',
+                fontWeight: 800,
+                letterSpacing: '0.04em',
+                backgroundColor: 'rgba(0, 240, 255, 0.15)',
+                color: '#00F0FF',
+                border: '1px solid rgba(0, 240, 255, 0.45)',
+                boxShadow: '0 0 10px rgba(0, 240, 255, 0.25)'
               }}
             >
-              {geoLocating ? 'Locating...' : 'Use My Location'}
-            </button>
+              📍 MANDATORY GEOFENCE LOCK (GPS REQUIRED)
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleUseLocation}
+            disabled={submitting || geoLocating}
+            className="btn btn-secondary btn-3d-cyber"
+            style={{
+              fontSize: '0.8rem',
+              padding: '0.4rem 0.85rem',
+              cursor: submitting || geoLocating ? 'not-allowed' : 'pointer',
+              width: 'auto'
+            }}
+          >
+            {geoLocating ? '⏳ Locating...' : '📍 Use My Location'}
+          </button>
+        </div>
+
+        {locationFeedback && (
+          <div
+            style={{
+              fontSize: '0.8rem',
+              marginBottom: '0.85rem',
+              color: locationFeedback.startsWith('✓') ? '#10B981' : '#F59E0B'
+            }}
+          >
+            {locationFeedback}
+          </div>
+        )}
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.85rem' }}>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label htmlFor={latInputId} className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f1f5f9', display: 'block', marginBottom: '0.3rem' }}>
+              Latitude (-90 to 90) <span style={{ color: '#f43f5e' }}>*</span>
+            </label>
+            <input
+              id={latInputId}
+              type="number"
+              step="any"
+              min="-90"
+              max="90"
+              placeholder="e.g. 37.7749"
+              value={geoLat}
+              onChange={(e) => {
+                setGeoLat(e.target.value);
+                setErrorMessage(null);
+              }}
+              onWheel={(e) => e.currentTarget.blur()}
+              disabled={submitting}
+              className="form-input"
+              required
+            />
+          </div>
+
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label htmlFor={lngInputId} className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f1f5f9', display: 'block', marginBottom: '0.3rem' }}>
+              Longitude (-180 to 180) <span style={{ color: '#f43f5e' }}>*</span>
+            </label>
+            <input
+              id={lngInputId}
+              type="number"
+              step="any"
+              min="-180"
+              max="180"
+              placeholder="e.g. -122.4194"
+              value={geoLng}
+              onChange={(e) => {
+                setGeoLng(e.target.value);
+                setErrorMessage(null);
+              }}
+              onWheel={(e) => e.currentTarget.blur()}
+              disabled={submitting}
+              className="form-input"
+              required
+            />
+          </div>
+        </div>
+
+        {/* Inline Coordinate Validator Pill */}
+        <div style={{ marginBottom: '1rem' }}>
+          {isGpsValid ? (
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                color: '#10B981',
+                backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                border: '1px solid rgba(16, 185, 129, 0.35)',
+                padding: '0.2rem 0.6rem',
+                borderRadius: '6px'
+              }}
+            >
+              ✓ Valid GPS Coordinates Locked ({Number(geoLat).toFixed(4)}, {Number(geoLng).toFixed(4)})
+            </div>
+          ) : (hasLat || hasLng) ? (
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                color: '#F43F5E',
+                backgroundColor: 'rgba(244, 63, 94, 0.12)',
+                border: '1px solid rgba(244, 63, 94, 0.35)',
+                padding: '0.2rem 0.6rem',
+                borderRadius: '6px'
+              }}
+            >
+              ⚠ Coordinates out of bounds (Lat: -90 to 90, Lng: -180 to 180)
+            </div>
+          ) : (
+            <div style={{ fontSize: '0.76rem', color: '#94a3b8' }}>
+              📍 Enter perimeter center coordinates or click &quot;Use My Location&quot;.
+            </div>
           )}
         </div>
 
-        {enableGeofence && (
-          <div style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-            <div className="form-group">
-              <label htmlFor={latInputId} className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>
-                Latitude (-90 to 90)
-              </label>
-              <input
-                id={latInputId}
-                type="number"
-                step="any"
-                min="-90"
-                max="90"
-                placeholder="e.g. 37.7749"
-                value={geoLat}
-                onChange={(e) => setGeoLat(e.target.value)}
-                disabled={submitting}
-                className="form-input"
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor={lngInputId} className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>
-                Longitude (-180 to 180)
-              </label>
-              <input
-                id={lngInputId}
-                type="number"
-                step="any"
-                min="-180"
-                max="180"
-                placeholder="e.g. -122.4194"
-                value={geoLng}
-                onChange={(e) => setGeoLng(e.target.value)}
-                disabled={submitting}
-                className="form-input"
-              />
-            </div>
-
-            <div className="form-group" style={{ gridColumn: 'span 2' }}>
-              <label htmlFor={radiusInputId} className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>
-                Radius (meters: 1 - 100,000)
-              </label>
-              <input
-                id={radiusInputId}
-                type="number"
-                min="1"
-                max="100000"
-                placeholder="e.g. 500"
-                value={geoRadiusMeters}
-                onChange={(e) => setGeoRadiusMeters(e.target.value)}
-                disabled={submitting}
-                className="form-input"
-              />
+        {/* Radius Input & Quick-Select Pills */}
+        <div className="form-group" style={{ marginBottom: 0 }}>
+          <label htmlFor={radiusInputId} className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f1f5f9', display: 'block', marginBottom: '0.3rem' }}>
+            Allowed Unlock Radius (meters: 1 - 100,000) <span style={{ color: '#f43f5e' }}>*</span>
+          </label>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+            <input
+              id={radiusInputId}
+              type="number"
+              min="1"
+              max="100000"
+              placeholder="e.g. 500"
+              value={geoRadiusMeters}
+              onChange={(e) => {
+                setGeoRadiusMeters(e.target.value);
+                setErrorMessage(null);
+              }}
+              onWheel={(e) => e.currentTarget.blur()}
+              disabled={submitting}
+              className="form-input"
+              style={{ maxWidth: '160px' }}
+              required
+            />
+            {/* Radius Quick-Select Pills */}
+            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+              {[
+                { label: '100m', val: '100' },
+                { label: '500m', val: '500' },
+                { label: '5 km', val: '5000' },
+                { label: '25 km', val: '25000' }
+              ].map((pill) => {
+                const isActive = String(geoRadiusMeters) === pill.val;
+                return (
+                  <button
+                    key={pill.val}
+                    type="button"
+                    onClick={() => {
+                      setGeoRadiusMeters(pill.val);
+                      setErrorMessage(null);
+                    }}
+                    style={{
+                      padding: '0.3rem 0.65rem',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      border: isActive ? '1px solid #00F0FF' : '1px solid rgba(56, 189, 248, 0.25)',
+                      backgroundColor: isActive ? 'rgba(0, 240, 255, 0.2)' : 'rgba(15, 23, 42, 0.7)',
+                      color: isActive ? '#00F0FF' : '#94a3b8',
+                      boxShadow: isActive ? '0 0 8px rgba(0, 240, 255, 0.3)' : 'none',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    {pill.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
-        )}
+          <span style={{ fontSize: '0.76rem', color: '#94a3b8' }}>
+            Recipient device GPS must resolve within this perimeter to unlock.
+          </span>
+        </div>
+      </div>
+
+      {/* Intrusion Protection & Breach Defense Section */}
+      <div
+        className="intrusion-defense-section"
+        style={{
+          border: '1px solid rgba(244, 63, 94, 0.3)',
+          borderRadius: '10px',
+          padding: '1.25rem',
+          marginBottom: '1.5rem',
+          backgroundColor: 'rgba(24, 8, 14, 0.65)',
+          boxShadow: 'inset 0 1px 3px rgba(0, 0, 0, 0.6)'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.85rem' }}>
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              padding: '0.2rem 0.55rem',
+              borderRadius: '9999px',
+              fontSize: '0.72rem',
+              fontWeight: 800,
+              backgroundColor: 'rgba(244, 63, 94, 0.15)',
+              color: '#F43F5E',
+              border: '1px solid rgba(244, 63, 94, 0.4)'
+            }}
+          >
+            🛡️ INTRUSION PROTECTION &amp; SELF-DESTRUCT
+          </span>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.85rem' }}>
+          {/* Max Failed Attempts Selector */}
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label htmlFor={maxAttemptsInputId} className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f1f5f9', display: 'block', marginBottom: '0.3rem' }}>
+              Max Attempts Before Self-Destruct
+            </label>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              {['2', '3'].map((att) => {
+                const isSelected = String(maxFailedAttempts) === att;
+                return (
+                  <button
+                    key={att}
+                    type="button"
+                    onClick={() => setMaxFailedAttempts(att)}
+                    style={{
+                      flex: 1,
+                      padding: '0.5rem',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      border: isSelected ? '1px solid #F43F5E' : '1px solid rgba(244, 63, 94, 0.25)',
+                      backgroundColor: isSelected ? 'rgba(244, 63, 94, 0.22)' : 'rgba(15, 23, 42, 0.7)',
+                      color: isSelected ? '#FDA4AF' : '#94a3b8',
+                      boxShadow: isSelected ? '0 0 10px rgba(244, 63, 94, 0.25)' : 'none',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    {att} Attempts {att === '3' ? '(Default)' : ''}
+                  </button>
+                );
+              })}
+            </div>
+            <span style={{ fontSize: '0.74rem', color: '#94a3b8', display: 'block', marginTop: '0.35rem' }}>
+              Permanent crypto-shredding occurs upon reaching this limit.
+            </span>
+          </div>
+
+          {/* Alert Phone Number Field */}
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label htmlFor={alertPhoneInputId} className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f1f5f9', display: 'block', marginBottom: '0.3rem' }}>
+              Breach Alert Phone (Optional SMS)
+            </label>
+            <input
+              id={alertPhoneInputId}
+              type="tel"
+              placeholder="+1 (555) 019-2834"
+              value={alertPhone}
+              onChange={(e) => setAlertPhone(e.target.value)}
+              disabled={submitting}
+              className="form-input"
+            />
+            <span style={{ fontSize: '0.74rem', color: '#94a3b8', display: 'block', marginTop: '0.35rem' }}>
+              SMS intrusion alerts dispatched immediately upon breach.
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Submit Button with Loading State */}

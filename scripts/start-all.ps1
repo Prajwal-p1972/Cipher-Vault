@@ -28,6 +28,12 @@ function Test-PortOpen($port) {
     }
 }
 
+# Helper to find MongoDB
+$mongoExe = if (Get-Command mongod -ErrorAction SilentlyContinue) { "mongod" }
+             elseif (Test-Path "C:\Program Files\MongoDB\Server\8.2\bin\mongod.exe") { "C:\Program Files\MongoDB\Server\8.2\bin\mongod.exe" }
+             elseif (Get-ChildItem "C:\Program Files\MongoDB\Server" -Recurse -Filter "mongod.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName) { (Get-ChildItem "C:\Program Files\MongoDB\Server" -Recurse -Filter "mongod.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName) }
+             else { "mongod" }
+
 # Helper to find Ollama
 $ollamaExe = if (Get-Command ollama -ErrorAction SilentlyContinue) { "ollama" }
              elseif (Test-Path "$env:LOCALAPPDATA\Programs\Ollama\ollama.exe") { "$env:LOCALAPPDATA\Programs\Ollama\ollama.exe" }
@@ -38,7 +44,7 @@ if (Test-PortOpen 27017) {
     Write-Host "[1/5] MongoDB is already running on port 27017." -ForegroundColor Green
 } else {
     Write-Host "[1/5] Launching MongoDB..." -ForegroundColor Green
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", "Write-Host 'MongoDB Instance' -ForegroundColor Green; if (Get-Service MongoDB -ErrorAction SilentlyContinue) { Start-Service MongoDB } elseif (Get-Command docker -ErrorAction SilentlyContinue) { docker start cipher-mongo } else { mongod }"
+    Start-Process powershell -ArgumentList "-NoExit", "-Command", "Write-Host 'MongoDB Instance' -ForegroundColor Green; if (Get-Service MongoDB -ErrorAction SilentlyContinue) { Start-Service MongoDB } elseif (Get-Command docker -ErrorAction SilentlyContinue) { docker start cipher-mongo } else { & '$mongoExe' }"
 }
 
 # 2. Ollama LLM Service

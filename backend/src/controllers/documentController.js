@@ -26,30 +26,32 @@ const uploadFieldsSchema = z
       .default(false),
     geoLat: z
       .preprocess(
-        (val) => (val === '' || val === undefined ? undefined : Number(val)),
-        z.number().min(-90).max(90).optional()
+        (val) => (val === '' || val === undefined || val === null ? undefined : Number(val)),
+        z.number({ required_error: 'Geofence coordinates (latitude, longitude, radius) are mandatory for all sealed documents' })
+          .min(-90, 'Latitude must be between -90 and 90')
+          .max(90, 'Latitude must be between -90 and 90')
       ),
     geoLng: z
       .preprocess(
-        (val) => (val === '' || val === undefined ? undefined : Number(val)),
-        z.number().min(-180).max(180).optional()
+        (val) => (val === '' || val === undefined || val === null ? undefined : Number(val)),
+        z.number({ required_error: 'Geofence coordinates (latitude, longitude, radius) are mandatory for all sealed documents' })
+          .min(-180, 'Longitude must be between -180 and 180')
+          .max(180, 'Longitude must be between -180 and 180')
       ),
     geoRadiusMeters: z
       .preprocess(
-        (val) => (val === '' || val === undefined ? undefined : Number(val)),
-        z.number().min(1).max(100000).optional()
+        (val) => (val === '' || val === undefined || val === null ? undefined : Number(val)),
+        z.number({ required_error: 'Geofence coordinates (latitude, longitude, radius) are mandatory for all sealed documents' })
+          .min(10, 'Radius must be between 10 and 50,000 meters')
+          .max(50000, 'Radius must be between 10 and 50,000 meters')
       ),
+    maxFailedAttempts: z
+      .preprocess(
+        (val) => (val === '' || val === undefined || val === null ? 3 : Number(val)),
+        z.number().int().min(1).max(5).optional().default(3)
+      ),
+    alertPhone: z.string().trim().max(30).optional().nullable(),
     delivery: z.enum(['wrapped', 'qr']).optional().default('wrapped')
-  })
-  .superRefine((data, ctx) => {
-    const geoFields = [data.geoLat, data.geoLng, data.geoRadiusMeters];
-    const presentCount = geoFields.filter((f) => f !== undefined).length;
-    if (presentCount > 0 && presentCount < 3) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'All three geofence fields (geoLat, geoLng, geoRadiusMeters) must be provided together'
-      });
-    }
   });
 
 /**
@@ -67,26 +69,39 @@ export async function createDocument(req, res) {
 
   const parsed = uploadFieldsSchema.safeParse(req.body);
   if (!parsed.success) {
+    const isGeoIssue = parsed.error.issues.some((i) =>
+      ['geoLat', 'geoLng', 'geoRadiusMeters'].includes(i.path[0])
+    );
+    const message = isGeoIssue
+      ? 'Geofence coordinates (latitude, longitude, radius) are mandatory for all sealed documents'
+      : 'Validation failed';
     const details = parsed.error.issues.map((i) => ({
       path: i.path.join('.'),
       message: i.message
     }));
-    throw AppError.badRequest('Validation failed', details);
+    throw AppError.badRequest(message, details);
   }
 
-  const { receiverEmail, expiresAt, oneTimeUse, geoLat, geoLng, geoRadiusMeters, delivery } = parsed.data;
+  const {
+    receiverEmail,
+    expiresAt,
+    oneTimeUse,
+    geoLat,
+    geoLng,
+    geoRadiusMeters,
+    maxFailedAttempts,
+    alertPhone,
+    delivery
+  } = parsed.data;
 
   const policy = {
     expiresAt: expiresAt ? new Date(expiresAt) : null,
     oneTimeUse,
-    geofence:
-      geoLat !== undefined
-        ? {
-            lat: geoLat,
-            lng: geoLng,
-            radiusMeters: geoRadiusMeters
-          }
-        : null
+    geofence: {
+      lat: geoLat,
+      lng: geoLng,
+      radiusMeters: geoRadiusMeters
+    }
   };
 
   const ctx = {
@@ -104,6 +119,8 @@ export async function createDocument(req, res) {
         declaredMime: req.file.mimetype
       },
       policy,
+      maxFailedAttempts,
+      alertPhone,
       delivery
     },
     ctx

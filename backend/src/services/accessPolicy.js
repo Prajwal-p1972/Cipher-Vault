@@ -18,7 +18,11 @@ export function evaluatePolicy({ doc, now = new Date(), location }, options = {}
   const maxAccuracy =
     options.maxAccuracyMeters ?? env.GEO_MAX_ACCURACY_METERS ?? 500;
 
-  // a) Document status is 'consumed' or 'revoked'
+  // a) Document status is 'destroyed', 'consumed', or 'revoked'
+  if (doc?.status === 'destroyed') {
+    return { allowed: false, code: 'destroyed', status: 410 };
+  }
+
   if (doc?.status === 'consumed' || doc?.status === 'revoked') {
     return { allowed: false, code: 'consumed', status: 410 };
   }
@@ -70,12 +74,13 @@ export function evaluatePolicy({ doc, now = new Date(), location }, options = {}
       location.lng
     );
 
+    const distanceMeters = Math.round(distance / 10) * 10;
+
     if (distance > geofence.radiusMeters) {
-      return { allowed: false, code: 'outside_area', status: 403 };
+      return { allowed: false, code: 'outside_area', status: 403, distanceMeters };
     }
 
     // f) Allowed with rounded distance (rounded to nearest 10 meters, for audit only)
-    const distanceMeters = Math.round(distance / 10) * 10;
     return { allowed: true, distanceMeters };
   }
 

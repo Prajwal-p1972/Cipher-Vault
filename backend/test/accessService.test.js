@@ -71,7 +71,15 @@ describe('Access Service Unit Tests (Mocked DB & Service Injections)', () => {
             Object.assign(doc, update.$set);
           }
           if (update.$inc) {
-            doc.accessCount = (doc.accessCount || 0) + (update.$inc.accessCount || 0);
+            for (const [k, v] of Object.entries(update.$inc)) {
+              doc[k] = (doc[k] || 0) + v;
+            }
+          }
+          if (update.$push) {
+            for (const [k, v] of Object.entries(update.$push)) {
+              if (!Array.isArray(doc[k])) doc[k] = [];
+              doc[k].push(v);
+            }
           }
           return { ...doc };
         }
@@ -348,5 +356,106 @@ describe('Access Service Unit Tests (Mocked DB & Service Injections)', () => {
     const denyAudit = auditLogs.find((a) => a.action === 'DOC_ACCESS_DENIED');
     assert.ok(denyAudit);
     assert.strictEqual(denyAudit.meta.reason, 'not_receiver');
+  });
+
+  it('rejects already destroyed documents with 410 and code "destroyed"', async () => {
+    const doc = createBaseDoc({
+      status: 'destroyed',
+      destroyedAt: new Date(),
+      destructionReason: 'Exceeded maximum failed access attempts'
+    });
+    docsMap.set(doc._id.toString(), doc);
+
+    const deps = makeMockDeps();
+    await assert.rejects(
+      async () =>
+        unlockDocument(
+          {
+            userId: receiverId,
+            documentId: doc._id.toString(),
+            documentKeyB64Url: validKey,
+            code: validCode
+          },
+          {},
+          deps
+        ),
+      (err) => {
+        assert.strictEqual(err.statusCode, 410);
+        assert.strictEqual(err.code, 'destroyed');
+        assert.match(err.message, /permanently destroyed and crypto-shredded/i);
+        return true;
+      }
+    );
+  });
+
+  it('records failed attempt in intrusionLog and triggers crypto-shredding on 3rd failure', async () => {
+    let deletedStorageKey = null;
+    const alertDispatches = [];
+
+    const doc = createBaseDoc({
+      maxFailedAttempts: 3,
+      failedAttempts: 2, // Already 2 failed attempts
+      storage: { provider: 'memory', key: 'docs/victim-data.bin' },
+      policy: {
+        geofence: { lat: 37.7749, lng: -122.4194, radiusMeters: 500 },
+        expiresAt: new Date(Date.now() + 86400000).toISOString(),
+        oneTimeUse: false
+      }
+    });
+    docsMap.set(doc._id.toString(), doc);
+
+    const customDeps = {
+      ...makeMockDeps(),
+      storage: {
+        get: async () => Buffer.from('data'),
+        delete: async (key) => {
+          deletedStorageKey = key;
+          return true;
+        }
+      },
+      sendBreachAlert: async (alert) => {
+        alertDispatches.push(alert);
+        return { dispatched: true };
+      }
+    };
+
+    // 3rd attempt from outside geofence (approx 10km away)
+    await assert.rejects(
+      async () =>
+        unlockDocument(
+          {
+            userId: receiverId,
+            documentId: doc._id.toString(),
+            documentKeyB64Url: validKey,
+            code: validCode,
+            location: { lat: 37.8749, lng: -122.4194, accuracyMeters: 10 }
+          },
+          { ip: '203.0.113.42' },
+          customDeps
+        ),
+      (err) => {
+        assert.strictEqual(err.statusCode, 403);
+        assert.strictEqual(err.code, 'document_destroyed');
+        assert.match(err.message, /permanently destroyed and crypto-shredded/i);
+        return true;
+      }
+    );
+
+    // Verify crypto-shredding occurred
+    assert.strictEqual(deletedStorageKey, 'docs/victim-data.bin');
+
+    // Verify document was marked as destroyed in database
+    const updatedDoc = docsMap.get(doc._id.toString());
+    assert.strictEqual(updatedDoc.status, 'destroyed');
+    assert.strictEqual(updatedDoc.failedAttempts, 3);
+    assert.ok(updatedDoc.destroyedAt);
+    assert.match(updatedDoc.destructionReason, /Exceeded maximum failed access attempts/i);
+
+    // Verify alert dispatched
+    assert.strictEqual(alertDispatches.length, 1);
+    assert.strictEqual(alertDispatches[0].isDestroyed, true);
+    assert.strictEqual(alertDispatches[0].failedAttempts, 3);
+    assert.strictEqual(alertDispatches[0].maxFailedAttempts, 3);
+    assert.strictEqual(alertDispatches[0].remainingAttempts, 0);
   });
 });

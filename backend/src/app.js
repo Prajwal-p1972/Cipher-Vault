@@ -3,6 +3,7 @@ import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { env } from './config/env.js';
+import { isAllowedOrigin } from './config/cors.js';
 import authRoutes from './routes/auth.js';
 import auditRoutes from './routes/audit.js';
 import documentRoutes from './routes/documents.js';
@@ -12,13 +13,19 @@ import { notFound, errorHandler } from './middleware/error.js';
 
 const app = express();
 
-// Security Hardening
+// Security Hardening & Reverse Proxy Trust (Required for Render, Heroku, AWS ALB)
 app.disable('x-powered-by');
+app.set('trust proxy', 1);
 app.use(helmet());
 
 app.use(
   cors({
-    origin: env.CLIENT_ORIGIN,
+    origin: (origin, callback) => {
+      if (isAllowedOrigin(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error('Origin not allowed by CORS'));
+    },
     credentials: true
   })
 );

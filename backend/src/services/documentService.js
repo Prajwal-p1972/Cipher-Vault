@@ -169,6 +169,10 @@ export function toPublicDoc(doc, forUserId = null) {
     status: d.status,
     policy: policyOut,
     accessCount: d.accessCount ?? 0,
+    failedAttempts: d.failedAttempts ?? 0,
+    maxFailedAttempts: d.maxFailedAttempts ?? 3,
+    destroyedAt: d.destroyedAt ?? null,
+    destructionReason: d.destructionReason ?? null,
     consumedAt: d.consumedAt ?? null,
     createdAt: d.createdAt,
     updatedAt: d.updatedAt
@@ -279,6 +283,10 @@ export async function sealDocument(params, ctx = {}, customDeps = {}) {
     mimeType,
     sizeBytes: file.buffer.length,
     delivery: deliveryMode,
+    maxFailedAttempts: params.maxFailedAttempts ? Number(params.maxFailedAttempts) : 3,
+    failedAttempts: 0,
+    alertPhone: params.alertPhone || null,
+    intrusionLog: [],
     storage: {
       provider: env.STORAGE_DRIVER || 'memory',
       key: 'pending'

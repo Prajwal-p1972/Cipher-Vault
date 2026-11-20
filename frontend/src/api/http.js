@@ -1,6 +1,37 @@
 let accessToken = null;
 let refreshPromise = null;
 
+const rawApiUrl = (import.meta.env?.VITE_API_URL || '').trim().replace(/\/+$/, '');
+
+/**
+ * Resolves a request path against VITE_API_URL if configured.
+ * Relative paths fall back to the same origin (compatible with Vite local dev proxying).
+ * Prevents duplicate '/api' segments when both VITE_API_URL and path contain '/api'.
+ *
+ * @param {string} path
+ * @returns {string}
+ */
+export function resolveUrl(path) {
+  if (!path) return '';
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
+
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+
+  // If VITE_API_URL is empty or relative dev proxy ('/api' or '/'), keep path relative
+  if (!rawApiUrl || rawApiUrl === '/api' || rawApiUrl === '/') {
+    return cleanPath;
+  }
+
+  // Prevent '/api/api/...' if rawApiUrl ends with '/api' and cleanPath starts with '/api'
+  if (rawApiUrl.endsWith('/api') && cleanPath.startsWith('/api')) {
+    return `${rawApiUrl}${cleanPath.slice(4)}`;
+  }
+
+  return `${rawApiUrl}${cleanPath}`;
+}
+
 /**
  * Custom error class wrapping HTTP error status and structured error details.
  */
@@ -49,7 +80,7 @@ export function refreshSession() {
   if (!refreshPromise) {
     refreshPromise = (async () => {
       try {
-        const res = await fetch('/api/auth/refresh', {
+        const res = await fetch(resolveUrl('/api/auth/refresh'), {
           method: 'POST',
           credentials: 'include',
           headers: {
@@ -123,7 +154,7 @@ export async function request(path, options = {}) {
     requestBody = JSON.stringify(body);
   }
 
-  const response = await fetch(path, {
+  const response = await fetch(resolveUrl(path), {
     method,
     headers,
     body: requestBody,
@@ -135,8 +166,8 @@ export async function request(path, options = {}) {
     response.status === 401 &&
     !_isRetry &&
     effectiveToken &&
-    path !== '/api/auth/login' &&
-    path !== '/api/auth/refresh'
+    !path.endsWith('/api/auth/login') &&
+    !path.endsWith('/api/auth/refresh')
   ) {
     const refreshData = await refreshSession();
     return request(path, {
@@ -203,7 +234,7 @@ export async function requestBlob(path, options = {}) {
     requestBody = JSON.stringify(body);
   }
 
-  const response = await fetch(path, {
+  const response = await fetch(resolveUrl(path), {
     method,
     headers,
     body: requestBody,
@@ -215,8 +246,8 @@ export async function requestBlob(path, options = {}) {
     response.status === 401 &&
     !_isRetry &&
     effectiveToken &&
-    path !== '/api/auth/login' &&
-    path !== '/api/auth/refresh'
+    !path.endsWith('/api/auth/login') &&
+    !path.endsWith('/api/auth/refresh')
   ) {
     const refreshData = await refreshSession();
     return requestBlob(path, {

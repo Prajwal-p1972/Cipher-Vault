@@ -17,7 +17,7 @@ const COOKIE_NAME = 'cv_refresh';
 const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: env.NODE_ENV === 'production',
-  sameSite: 'strict',
+  sameSite: env.COOKIE_SAMESITE || (env.NODE_ENV === 'production' ? 'none' : 'strict'),
   path: '/api/auth',
   maxAge: 7 * 24 * 60 * 60 * 1000
 };

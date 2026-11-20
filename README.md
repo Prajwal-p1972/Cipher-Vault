@@ -155,4 +155,5 @@ npm run dev
 ```
 
 Visit `http://localhost:3000` to interact with Cipher Vault.
+For production cloud deployment instructions on Render & Vercel with MongoDB Atlas, see [DEPLOYMENT.md](DEPLOYMENT.md).
 For detailed configuration steps, testing procedures, and security configurations, consult [SETUP.md](docs/SETUP.md).

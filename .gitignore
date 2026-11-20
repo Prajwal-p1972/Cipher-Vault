@@ -10,10 +10,12 @@
 # Dependencies & Build outputs
 node_modules/
 dist/
+build/
 coverage/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 
 # Python artifacts
 __pycache__/
@@ -29,6 +31,17 @@ data/
 *.bin
 *.png
 
-# System files
+# Temporary Tunnel Binaries & Executables
+cloudflared.exe
+cloudflared
+*.exe
+
+# Deployment Provider Caches
+.vercel
+.render
+
+# System & Editor files
 .DS_Store
 Thumbs.db
+.vscode/
+.idea/
