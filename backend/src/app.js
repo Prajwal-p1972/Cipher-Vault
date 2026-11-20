@@ -35,7 +35,22 @@ app.use(cookieParser());
 // NOTE: File uploads in Phase 2 must use a streaming path, not this JSON limit.
 app.use(express.json({ limit: '100kb' }));
 
-// Health Check
+// Root Service Status & Health Check
+app.get('/', (req, res) => {
+  res.status(200).json({
+    name: 'Cipher Vault Zero-Trust Backend API',
+    status: 'online',
+    version: '1.0.0',
+    endpoints: {
+      health: '/health',
+      auth: '/api/auth',
+      documents: '/api/documents',
+      analytics: '/api/analytics',
+      keys: '/api/keys'
+    }
+  });
+});
+
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });

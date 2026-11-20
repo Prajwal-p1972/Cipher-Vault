@@ -1,5 +1,6 @@
 # Cipher Vault - Offline AI Microservice Requirements
 # Pinned verified versions for Windows CPU execution
+--extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.14.1+cpu; sys_platform == 'win32'
 torch>=2.2.0; sys_platform != 'win32'
 fastapi==0.142.2

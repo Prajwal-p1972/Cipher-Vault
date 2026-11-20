@@ -46,6 +46,15 @@ describe('File Validation Tests', () => {
     assert.strictEqual(zipRes.mimeType, 'application/zip');
     assert.strictEqual(zipRes.safeName, 'archive.zip');
 
+    // Windows ZIP alias (application/x-zip-compressed)
+    const zipWinRes = validateUpload({
+      buffer: zipHeaderStandard,
+      originalName: 'report.zip',
+      declaredMime: 'application/x-zip-compressed'
+    });
+    assert.strictEqual(zipWinRes.mimeType, 'application/zip');
+    assert.strictEqual(zipWinRes.safeName, 'report.zip');
+
     // Empty ZIP
     const zipEmptyRes = validateUpload({
       buffer: zipHeaderEmpty,

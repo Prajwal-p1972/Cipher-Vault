@@ -118,10 +118,21 @@ export function validateUpload({ buffer, originalName, declaredMime }) {
     throw new Error('Upload validation failed: unsupported file type or invalid magic bytes');
   }
 
-  const normalizedDeclared =
+  const rawDeclared =
     typeof declaredMime === 'string'
       ? declaredMime.split(';')[0].toLowerCase().trim()
       : '';
+
+  const MIME_ALIASES = {
+    'application/x-zip-compressed': 'application/zip',
+    'application/x-zip': 'application/zip',
+    'multipart/x-zip': 'application/zip',
+    'image/jpg': 'image/jpeg',
+    'image/pjpeg': 'image/jpeg',
+    'application/x-pdf': 'application/pdf'
+  };
+
+  const normalizedDeclared = MIME_ALIASES[rawDeclared] || rawDeclared;
 
   if (normalizedDeclared !== detectedMime) {
     throw new Error(

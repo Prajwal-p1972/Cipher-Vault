@@ -265,9 +265,14 @@ export function UploadForm({ onSuccess }) {
       radiusMeters: parsedRadius
     };
 
-    // 6. Construct FormData
+    // 6. Construct FormData (normalize Windows ZIP MIME type to standard application/zip)
+    const normalizedFile =
+      file.type === 'application/x-zip-compressed' || (file.name.toLowerCase().endsWith('.zip') && !file.type)
+        ? new File([file], file.name, { type: 'application/zip' })
+        : file;
+
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', normalizedFile);
     formData.append('receiverEmail', receiverEmail.trim());
     formData.append('delivery', effectiveDelivery);
     formData.append('oneTimeUse', oneTimeUse ? 'true' : 'false');
