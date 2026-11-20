@@ -133,6 +133,26 @@ async def test_cors_preflight_and_private_network():
             == "true"
         )
 
+        # Preflight for Vercel origin
+        vercel_res = await client.options(
+            "/v1/sessions",
+            headers={
+                "Origin": "https://cipher-vault-rho.vercel.app",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "Authorization, Content-Type",
+                "Access-Control-Request-Private-Network": "true",
+            },
+        )
+        assert vercel_res.status_code == 200
+        assert (
+            vercel_res.headers.get("Access-Control-Allow-Origin")
+            == "https://cipher-vault-rho.vercel.app"
+        )
+        assert (
+            vercel_res.headers.get("Access-Control-Allow-Private-Network")
+            == "true"
+        )
+
         # Preflight for refused origin
         refused_res = await client.options(
             "/v1/sessions",

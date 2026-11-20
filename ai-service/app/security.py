@@ -10,6 +10,17 @@ from app.config import Settings, get_settings
 from app.sessions import AuthError, Session, SessionManager
 
 
+def is_origin_allowed(origin: str | None, allowed_origins: list[str]) -> bool:
+    """Validate incoming Origin against explicit allowlist and Vercel cloud domains."""
+    if not origin:
+        return False
+    if origin in allowed_origins:
+        return True
+    if origin.startswith("https://") and (origin.endswith(".vercel.app") or origin.endswith(".onrender.com")):
+        return True
+    return False
+
+
 class SecurityMiddleware(BaseHTTPMiddleware):
     """Enforces DNS rebinding defenses, strict Origin checks, and security headers."""
 
@@ -53,7 +64,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                                 "X-Content-Type-Options": "nosniff",
                             },
                         )
-                    if origin not in self._settings.allowed_origins:
+                    if not is_origin_allowed(origin, self._settings.allowed_origins):
                         return JSONResponse(
                             status_code=403,
                             content={"error": "Forbidden: origin not allowed"},
@@ -63,7 +74,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                             },
                         )
                 elif origin is not None:
-                    if origin not in self._settings.allowed_origins:
+                    if not is_origin_allowed(origin, self._settings.allowed_origins):
                         return JSONResponse(
                             status_code=403,
                             content={"error": "Forbidden: origin not allowed"},
@@ -82,7 +93,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         # 4. Explicitly allow private network on OPTIONS only for allowed origins
         if method == "OPTIONS":
             origin = request.headers.get("origin")
-            if not origin or origin not in self._settings.allowed_origins:
+            if not origin or not is_origin_allowed(origin, self._settings.allowed_origins):
                 if "access-control-allow-private-network" in response.headers:
                     del response.headers["access-control-allow-private-network"]
             elif request.headers.get("access-control-request-private-network") == "true":
@@ -97,8 +108,9 @@ def setup_cors(app: ASGIApp, settings: Settings | None = None) -> None:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cfg.allowed_origins,
-        allow_methods=["GET", "POST", "DELETE"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_origin_regex=r"^https://.*\.vercel\.app$",
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "Accept"],
         allow_credentials=False,
         allow_private_network=True,
     )
