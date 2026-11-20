@@ -135,12 +135,45 @@ Recipient Contact:  ${senderEmail}
 ================================================================================
 `.trim();
 
-  // 4. SMS Alert Formulation
+  // 4. SMS Alert Formulation & Telephony Dispatch
   let smsMessage = null;
   if (alertPhone) {
     smsMessage = isDestroyed
       ? `[CIPHER VAULT ALERT] Document "${docName}" was PERMANENTLY DESTROYED & CRYPTO-SHREDDED after ${failedAttempts}/${maxFailedAttempts} unauthorized attempts. Reason: ${reason}.`
       : `[CIPHER VAULT WARNING] Unauthorized access attempt detected on "${docName}". Attempt ${failedAttempts}/${maxFailedAttempts}. ${remainingAttempts} attempts before crypto-shred.`;
+
+    try {
+      const { env } = await import('../config/env.js');
+      if (env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_FROM_PHONE) {
+        const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`;
+        const authHeader = 'Basic ' + Buffer.from(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`).toString('base64');
+        const bodyParams = new URLSearchParams({
+          From: env.TWILIO_FROM_PHONE,
+          To: alertPhone,
+          Body: smsMessage
+        });
+
+        const twilioRes = await fetch(twilioUrl, {
+          method: 'POST',
+          headers: {
+            Authorization: authHeader,
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          body: bodyParams.toString()
+        });
+
+        if (!twilioRes.ok) {
+          const errBody = await twilioRes.text();
+          console.error(`[AlertService Twilio Error ${twilioRes.status}]:`, errBody);
+        } else {
+          console.log(`[AlertService Twilio]: SMS successfully dispatched to ${alertPhone}`);
+        }
+      } else {
+        console.log(`[AlertService SMS (Simulation Mode)]: Recipient=${alertPhone} | Message="${smsMessage}" | (Add TWILIO_* to Render env for live cellular SMS)`);
+      }
+    } catch (telephonyErr) {
+      console.error('[AlertService Telephony Warning]:', telephonyErr.message);
+    }
   }
 
   return {
