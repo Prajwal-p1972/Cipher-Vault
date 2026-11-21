@@ -420,7 +420,7 @@ describe('UploadForm Component Tests', () => {
       expect(screen.queryByTestId('secure-upload-success')).toBeNull();
     });
 
-    it('strictly enforces wrapped delivery when recipient has a registered vault key even if QR was selected', async () => {
+    it('respects user choice of In-person QR handover even when recipient has a registered vault key', async () => {
       let capturedBody = null;
       const onSuccess = vi.fn();
       globalThis.fetch = vi.fn(async (url, init) => {
@@ -440,7 +440,8 @@ describe('UploadForm Component Tests', () => {
             ok: true,
             status: 201,
             json: async () => ({
-              document: { id: 'doc-enforced-1', delivery: 'wrapped', originalName: 'doc.pdf' }
+              document: { id: 'doc-qr-1', delivery: 'qr', originalName: 'doc.pdf' },
+              documentKey: 'key-test-123'
             })
           };
         }
@@ -465,8 +466,7 @@ describe('UploadForm Component Tests', () => {
       fireEvent.change(lngInput, { target: { value: '-122.4194' } });
       fireEvent.blur(emailInput);
 
-      expect(await screen.findByText(/Receiver key fingerprint:/i)).toBeTruthy();
-      expect(deliverySelect.value).toBe('wrapped');
+      expect(deliverySelect.value).toBe('qr');
 
       fireEvent.click(submitBtn);
 
@@ -474,7 +474,7 @@ describe('UploadForm Component Tests', () => {
         expect(onSuccess).toHaveBeenCalled();
       });
 
-      expect(capturedBody.get('delivery')).toBe('wrapped');
+      expect(capturedBody.get('delivery')).toBe('qr');
     });
 
     it('supports "Use My Location", radius quick-select pills, and max attempts selector', async () => {
