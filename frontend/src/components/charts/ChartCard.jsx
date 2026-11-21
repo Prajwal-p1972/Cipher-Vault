@@ -55,14 +55,16 @@ export function ChartCard({
       role="region"
       aria-label={title}
       style={{
-        backgroundColor: '#ffffff',
-        border: '1px solid #e2e8f0',
-        borderRadius: '8px',
+        background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.88) 0%, rgba(10, 15, 29, 0.96) 100%)',
+        border: '1px solid rgba(56, 189, 248, 0.22)',
+        borderRadius: '12px',
         padding: '1.25rem',
-        boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)',
+        boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.75), 0 0 16px rgba(56, 189, 248, 0.08)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
         display: 'flex',
         flexDirection: 'column',
-        minHeight: '280px'
+        minHeight: '290px'
       }}
     >
       {/* Header */}
@@ -80,8 +82,10 @@ export function ChartCard({
           style={{
             margin: 0,
             fontSize: '1rem',
-            fontWeight: 600,
-            color: '#1e293b'
+            fontWeight: 700,
+            color: '#f8fafc',
+            letterSpacing: '-0.01em',
+            textShadow: '0 0 12px rgba(56, 189, 248, 0.3)'
           }}
         >
           {title}
@@ -93,14 +97,15 @@ export function ChartCard({
             onClick={() => setShowTable((prev) => !prev)}
             aria-label={showTable ? `Show chart for ${title}` : `Show table for ${title}`}
             style={{
-              padding: '0.25rem 0.65rem',
+              padding: '0.3rem 0.75rem',
               fontSize: '0.75rem',
-              backgroundColor: '#f1f5f9',
-              color: '#475569',
-              border: '1px solid #cbd5e1',
-              borderRadius: '4px',
+              backgroundColor: 'rgba(30, 41, 59, 0.8)',
+              color: '#cbd5e1',
+              border: '1px solid rgba(56, 189, 248, 0.25)',
+              borderRadius: '6px',
               cursor: 'pointer',
-              fontWeight: 500
+              fontWeight: 600,
+              boxShadow: '0 2px 6px rgba(0, 0, 0, 0.3)'
             }}
           >
             {showTable ? 'View Chart' : 'Table View'}
@@ -183,7 +188,7 @@ export function ChartCard({
               }}
             >
               <thead>
-                <tr style={{ borderBottom: '2px solid #e2e8f0', color: '#475569' }}>
+                <tr style={{ borderBottom: '2px solid rgba(56, 189, 248, 0.25)', color: '#94a3b8' }}>
                   {tableData.headers.map((h, idx) => (
                     <th key={idx} style={{ padding: '0.5rem 0.75rem', fontWeight: 600 }}>
                       {h}
@@ -196,12 +201,12 @@ export function ChartCard({
                   <tr
                     key={rIdx}
                     style={{
-                      borderBottom: '1px solid #f1f5f9',
-                      backgroundColor: rIdx % 2 === 0 ? '#ffffff' : '#f8fafc'
+                      borderBottom: '1px solid rgba(51, 65, 85, 0.45)',
+                      backgroundColor: rIdx % 2 === 0 ? 'rgba(15, 23, 42, 0.4)' : 'rgba(30, 41, 59, 0.3)'
                     }}
                   >
                     {row.map((cell, cIdx) => (
-                      <td key={cIdx} style={{ padding: '0.45rem 0.75rem', color: '#334155' }}>
+                      <td key={cIdx} style={{ padding: '0.5rem 0.75rem', color: '#e2e8f0' }}>
                         {cell}
                       </td>
                     ))}

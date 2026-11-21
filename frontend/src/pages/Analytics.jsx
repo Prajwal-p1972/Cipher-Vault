@@ -135,6 +135,23 @@ export function Analytics() {
     rows: denialItems.map((d) => [formatDenialCode(d.code), d.count])
   };
 
+  // Chart dark theme configuration
+  const darkScales = {
+    y: {
+      beginAtZero: true,
+      ticks: { color: '#94a3b8', precision: 0 },
+      grid: { color: 'rgba(51, 65, 85, 0.4)' }
+    },
+    x: {
+      ticks: { color: '#94a3b8' },
+      grid: { color: 'rgba(51, 65, 85, 0.2)' }
+    }
+  };
+
+  const darkLegend = {
+    labels: { color: '#cbd5e1', boxWidth: 12, padding: 12 }
+  };
+
   return (
     <Layout>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -149,10 +166,22 @@ export function Analytics() {
           }}
         >
           <div>
-            <h2 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 700, color: '#0f172a' }}>
-              My Activity & Analytics
-            </h2>
-            <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+              <span style={{ fontSize: '1.4rem' }}>📊</span>
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: '1.45rem',
+                  fontWeight: 800,
+                  color: '#f8fafc',
+                  letterSpacing: '-0.02em',
+                  textShadow: '0 0 16px rgba(56, 189, 248, 0.45)'
+                }}
+              >
+                My Activity & Analytics
+              </h2>
+            </div>
+            <p style={{ margin: '0.35rem 0 0 0', fontSize: '0.875rem', color: '#94a3b8' }}>
               Private overview of your document operations and security events.
             </p>
           </div>
@@ -163,9 +192,11 @@ export function Analytics() {
             aria-label="Date range selector"
             style={{
               display: 'inline-flex',
-              backgroundColor: '#e2e8f0',
-              padding: '0.2rem',
-              borderRadius: '6px'
+              backgroundColor: 'rgba(15, 23, 42, 0.85)',
+              border: '1px solid rgba(56, 189, 248, 0.25)',
+              padding: '0.25rem',
+              borderRadius: '8px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)'
             }}
           >
             {[7, 30, 90].map((num) => (
@@ -176,14 +207,15 @@ export function Analytics() {
                 aria-pressed={days === num}
                 style={{
                   border: 'none',
-                  padding: '0.35rem 0.85rem',
-                  borderRadius: '4px',
+                  padding: '0.35rem 0.9rem',
+                  borderRadius: '6px',
                   fontSize: '0.8rem',
-                  fontWeight: 600,
+                  fontWeight: 700,
                   cursor: 'pointer',
-                  backgroundColor: days === num ? '#ffffff' : 'transparent',
-                  color: days === num ? '#0f172a' : '#64748b',
-                  boxShadow: days === num ? '0 1px 2px rgba(0,0,0,0.05)' : 'none'
+                  backgroundColor: days === num ? '#0284c7' : 'transparent',
+                  color: days === num ? '#ffffff' : '#94a3b8',
+                  boxShadow: days === num ? '0 0 12px rgba(56, 189, 248, 0.45)' : 'none',
+                  transition: 'all 0.15s ease'
                 }}
               >
                 {num} Days
@@ -197,11 +229,11 @@ export function Analytics() {
           <div
             role="alert"
             style={{
-              backgroundColor: '#fef2f2',
-              color: '#991b1b',
+              backgroundColor: 'rgba(239, 68, 68, 0.15)',
+              color: '#fca5a5',
               padding: '0.85rem 1.25rem',
-              borderRadius: '6px',
-              border: '1px solid #fecaca',
+              borderRadius: '8px',
+              border: '1px solid rgba(239, 68, 68, 0.35)',
               fontSize: '0.875rem'
             }}
           >
@@ -219,21 +251,27 @@ export function Analytics() {
         >
           <div style={metricCardStyle}>
             <div style={metricLabelStyle}>Total Events</div>
-            <div style={metricValueStyle}>{overview?.totals?.events ?? '—'}</div>
+            <div style={{ ...metricValueStyle, color: '#38bdf8', textShadow: '0 0 14px rgba(56, 189, 248, 0.35)' }}>
+              {overview?.totals?.events ?? '—'}
+            </div>
           </div>
           <div style={metricCardStyle}>
             <div style={metricLabelStyle}>Failed Operations</div>
-            <div style={{ ...metricValueStyle, color: '#ef4444' }}>
+            <div style={{ ...metricValueStyle, color: '#f43f5e', textShadow: '0 0 14px rgba(244, 63, 94, 0.35)' }}>
               {overview?.totals?.failures ?? '—'}
             </div>
           </div>
           <div style={metricCardStyle}>
             <div style={metricLabelStyle}>Documents Sent</div>
-            <div style={metricValueStyle}>{overview?.totals?.documentsSent ?? '—'}</div>
+            <div style={{ ...metricValueStyle, color: '#34d399', textShadow: '0 0 14px rgba(52, 211, 153, 0.35)' }}>
+              {overview?.totals?.documentsSent ?? '—'}
+            </div>
           </div>
           <div style={metricCardStyle}>
             <div style={metricLabelStyle}>Documents Received</div>
-            <div style={metricValueStyle}>{overview?.totals?.documentsReceived ?? '—'}</div>
+            <div style={{ ...metricValueStyle, color: '#a78bfa', textShadow: '0 0 14px rgba(167, 139, 250, 0.35)' }}>
+              {overview?.totals?.documentsReceived ?? '—'}
+            </div>
           </div>
         </div>
 
@@ -258,8 +296,9 @@ export function Analytics() {
               options={{
                 responsive: true,
                 maintainAspectRatio: false,
-                scales: {
-                  y: { beginAtZero: true, ticks: { precision: 0 } }
+                scales: darkScales,
+                plugins: {
+                  legend: darkLegend
                 }
               }}
             />
@@ -278,8 +317,9 @@ export function Analytics() {
               options={{
                 responsive: true,
                 maintainAspectRatio: false,
-                scales: {
-                  y: { beginAtZero: true, ticks: { precision: 0 } }
+                scales: darkScales,
+                plugins: {
+                  legend: darkLegend
                 }
               }}
             />
@@ -297,7 +337,13 @@ export function Analytics() {
               data={doughnutData}
               options={{
                 responsive: true,
-                maintainAspectRatio: false
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: 'bottom',
+                    labels: { color: '#cbd5e1', boxWidth: 12, padding: 12 }
+                  }
+                }
               }}
             />
           </ChartCard>
@@ -315,8 +361,9 @@ export function Analytics() {
               options={{
                 responsive: true,
                 maintainAspectRatio: false,
-                scales: {
-                  y: { beginAtZero: true, ticks: { precision: 0 } }
+                scales: darkScales,
+                plugins: {
+                  legend: darkLegend
                 }
               }}
             />
@@ -326,11 +373,11 @@ export function Analytics() {
         {/* Recent Events Table */}
         <div
           style={{
-            backgroundColor: '#ffffff',
-            border: '1px solid #e2e8f0',
-            borderRadius: '8px',
+            background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.88) 0%, rgba(10, 15, 29, 0.96) 100%)',
+            border: '1px solid rgba(56, 189, 248, 0.22)',
+            borderRadius: '12px',
             padding: '1.25rem',
-            boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)'
+            boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.75), 0 0 16px rgba(56, 189, 248, 0.08)'
           }}
         >
           <div
@@ -341,10 +388,19 @@ export function Analytics() {
               marginBottom: '1rem'
             }}
           >
-            <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 600, color: '#1e293b' }}>
+            <h3
+              style={{
+                margin: 0,
+                fontSize: '1.05rem',
+                fontWeight: 700,
+                color: '#f8fafc',
+                letterSpacing: '-0.01em',
+                textShadow: '0 0 12px rgba(56, 189, 248, 0.3)'
+              }}
+            >
               Recent Events
             </h3>
-            <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+            <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
               Showing {events.length} event{events.length === 1 ? '' : 's'}
             </span>
           </div>
@@ -364,7 +420,7 @@ export function Analytics() {
                 }}
               >
                 <thead>
-                  <tr style={{ borderBottom: '2px solid #e2e8f0', color: '#475569' }}>
+                  <tr style={{ borderBottom: '2px solid rgba(56, 189, 248, 0.25)', color: '#94a3b8' }}>
                     <th style={{ padding: '0.65rem 0.75rem' }}>Time</th>
                     <th style={{ padding: '0.65rem 0.75rem' }}>Action</th>
                     <th style={{ padding: '0.65rem 0.75rem' }}>Outcome</th>
@@ -377,38 +433,39 @@ export function Analytics() {
                     <tr
                       key={ev.seq}
                       style={{
-                        borderBottom: '1px solid #f1f5f9'
+                        borderBottom: '1px solid rgba(51, 65, 85, 0.45)'
                       }}
                     >
-                      <td style={{ padding: '0.6rem 0.75rem', color: '#64748b' }}>
+                      <td style={{ padding: '0.6rem 0.75rem', color: '#94a3b8' }}>
                         {new Date(ev.createdAt).toLocaleString()}
                       </td>
-                      <td style={{ padding: '0.6rem 0.75rem', fontWeight: 500, color: '#1e293b' }}>
+                      <td style={{ padding: '0.6rem 0.75rem', fontWeight: 600, color: '#f8fafc' }}>
                         {ev.action}
                       </td>
                       <td style={{ padding: '0.6rem 0.75rem' }}>
                         <span
                           style={{
                             display: 'inline-block',
-                            padding: '0.15rem 0.5rem',
+                            padding: '0.2rem 0.6rem',
                             borderRadius: '9999px',
                             fontSize: '0.75rem',
-                            fontWeight: 600,
-                            backgroundColor: ev.outcome === 'success' ? '#ecfdf5' : '#fef2f2',
-                            color: ev.outcome === 'success' ? '#065f46' : '#991b1b'
+                            fontWeight: 700,
+                            backgroundColor: ev.outcome === 'success' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                            color: ev.outcome === 'success' ? '#34d399' : '#f87171',
+                            border: `1px solid ${ev.outcome === 'success' ? 'rgba(16, 185, 129, 0.35)' : 'rgba(239, 68, 68, 0.35)'}`
                           }}
                         >
                           {ev.outcome}
                         </span>
                       </td>
-                      <td style={{ padding: '0.6rem 0.75rem', color: '#64748b' }}>
+                      <td style={{ padding: '0.6rem 0.75rem', color: '#cbd5e1' }}>
                         {ev.resourceKind || '—'}
                       </td>
                       <td
                         style={{
                           padding: '0.6rem 0.75rem',
-                          fontFamily: 'monospace',
-                          color: '#475569',
+                          fontFamily: 'ui-monospace, monospace',
+                          color: '#38bdf8',
                           fontSize: '0.8rem'
                         }}
                       >
@@ -427,11 +484,14 @@ export function Analytics() {
                 type="button"
                 onClick={loadMoreEvents}
                 disabled={eventsLoading}
-                className="btn btn-secondary"
+                className="btn btn-secondary btn-3d-cyber"
                 style={{
-                  padding: '0.45rem 1.25rem',
+                  padding: '0.5rem 1.5rem',
                   fontSize: '0.85rem',
-                  width: 'auto'
+                  width: 'auto',
+                  backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                  color: '#f8fafc'
                 }}
               >
                 {eventsLoading ? 'Loading more...' : 'Load more'}
@@ -445,26 +505,30 @@ export function Analytics() {
 }
 
 const metricCardStyle = {
-  backgroundColor: '#ffffff',
-  border: '1px solid #e2e8f0',
-  borderRadius: '8px',
-  padding: '1rem',
-  boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)'
+  background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.88) 0%, rgba(10, 15, 29, 0.96) 100%)',
+  border: '1px solid rgba(56, 189, 248, 0.22)',
+  borderRadius: '12px',
+  padding: '1.15rem 1.25rem',
+  boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.7), 0 0 15px rgba(56, 189, 248, 0.08)',
+  backdropFilter: 'blur(12px)',
+  WebkitBackdropFilter: 'blur(12px)'
 };
 
 const metricLabelStyle = {
   fontSize: '0.75rem',
-  fontWeight: 600,
-  color: '#64748b',
+  fontWeight: 700,
+  color: '#94a3b8',
   textTransform: 'uppercase',
-  letterSpacing: '0.04em'
+  letterSpacing: '0.06em'
 };
 
 const metricValueStyle = {
-  fontSize: '1.4rem',
-  fontWeight: 700,
-  color: '#0f172a',
-  marginTop: '0.35rem'
+  fontSize: '1.65rem',
+  fontWeight: 800,
+  color: '#f8fafc',
+  marginTop: '0.35rem',
+  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+  letterSpacing: '-0.02em'
 };
 
 export default Analytics;
